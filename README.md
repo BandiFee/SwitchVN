@@ -70,6 +70,13 @@ It does four things:
 Options: `-y` to skip prompts, `--skip-system` / `--skip-proton` /
 `--skip-dxvk` to leave a part alone.
 
+Versions come from [switchvn.lock](switchvn.lock), not from whatever each
+repository published most recently. The components are not independent —
+libavcodec links `libenvideo.so`, which carries no version in its SONAME, so
+a mismatched pair produces bad decoding rather than a link error. The lock
+names one combination that was checked on hardware. To install a different
+one, point `SWITCHVN_LOCK` at your own copy.
+
 Afterwards:
 
 1. Restart Steam through Switchdeck's launcher:

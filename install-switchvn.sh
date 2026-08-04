@@ -17,16 +17,10 @@ set -euo pipefail
 
 # ---------------------------------------------------------------- constants --
 
-OWNER="BandiFee"
-REPO_ENVIDEO="SwitchVN-Envideo"
-REPO_FFMPEG="SwitchVN-FFmpeg"
-REPO_DXVK="SwitchVN-DXVK-Sarek"
-REPO_PROTON="SwitchVN-ProtonGE"
-
-ASSET_ENVIDEO="switchvn-envideo-aarch64.tar.gz"
-ASSET_FFMPEG="switchvn-ffmpeg-aarch64.tar.gz"
-ASSET_DXVK="switchvn-dxvk.tar.gz"
-# The Proton asset is named after its tag, so it is resolved from the release.
+# Component versions come from switchvn.lock rather than from each repository's
+# latest release: "latest of each" is a combination nobody has run.
+LOCK_URL="https://raw.githubusercontent.com/BandiFee/SwitchVN/main/switchvn.lock"
+LOCK_FILE="${SWITCHVN_LOCK:-}"
 
 STEAMROOT="$HOME/.local/share/Steam"
 SWITCHDECK_DIR="$STEAMROOT/Switchdeck"
@@ -90,18 +84,33 @@ confirm() {
     case "$reply" in ''|y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
-# Resolves the download URL of one asset in a repo's latest release.
-# The GitHub API is unauthenticated here, so it is rate limited to 60 requests
-# an hour per address; four calls per run leaves plenty of headroom.
-resolve_asset() {
-    local repo="$1" pattern="$2" json url
-    json=$(wget -qO- "https://api.github.com/repos/$OWNER/$repo/releases/latest") \
-        || die "cannot reach the GitHub API - check the network connection"
-    url=$(printf '%s' "$json" \
-        | sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p' \
-        | grep -E "$pattern" | head -n1)
-    [ -n "$url" ] || die "no asset matching '$pattern' in the latest $repo release"
-    printf '%s\n' "$url"
+# Reads one field of one component out of the lock file.
+#   lock_field ffmpeg tag  ->  switchvn-ffmpeg-8.1.1-1
+lock_field() {
+    local name="$1" field="$2" col
+    case "$field" in
+        repo)  col=2 ;;
+        tag)   col=3 ;;
+        asset) col=4 ;;
+        *)     die "internal: unknown lock field '$field'" ;;
+    esac
+    awk -v n="$name" -v c="$col" \
+        '$1 == n && NF >= 4 { print $c; found = 1; exit } END { exit !found }' \
+        "$LOCK_FILE" || die "no '$name' entry in the lock file"
+}
+
+# Release download URLs are stable and predictable, so pinning a tag means the
+# GitHub API is not involved at all - no rate limit, and no chance of picking
+# up a release that was published after this combination was tested.
+asset_url() {
+    local name="$1" repo tag asset
+    # Assign and check separately: die() inside a command substitution only
+    # exits that subshell, so building the URL inline would happily splice the
+    # error message into it and carry on.
+    repo=$(lock_field "$name" repo)   || exit 1
+    tag=$(lock_field "$name" tag)     || exit 1
+    asset=$(lock_field "$name" asset) || exit 1
+    printf 'https://github.com/%s/releases/download/%s/%s\n' "$repo" "$tag" "$asset"
 }
 
 fetch() {
@@ -158,20 +167,33 @@ fi
 
 # ----------------------------------------------------------------- download --
 
-step "Resolving releases"
+step "Reading the component lock"
 
 TMPDIR_SWITCHVN=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_SWITCHVN"' EXIT
 
+if [ -n "$LOCK_FILE" ]; then
+    [ -f "$LOCK_FILE" ] || die "SWITCHVN_LOCK points at $LOCK_FILE, which does not exist"
+    ok "using $LOCK_FILE"
+else
+    LOCK_FILE="$TMPDIR_SWITCHVN/switchvn.lock"
+    wget -qO "$LOCK_FILE" "$LOCK_URL" \
+        || die "cannot fetch the component lock - check the network connection"
+fi
+
+SWITCHVN_VERSION=$(awk '$1 == "SWITCHVN_VERSION" { print $2; exit }' "$LOCK_FILE")
+[ -n "$SWITCHVN_VERSION" ] || die "the lock file has no SWITCHVN_VERSION"
+ok "SwitchVN $SWITCHVN_VERSION"
+
 if [ "$SKIP_SYSTEM" -eq 0 ]; then
-    URL_ENVIDEO=$(resolve_asset "$REPO_ENVIDEO" "$ASSET_ENVIDEO\$")
-    URL_FFMPEG=$(resolve_asset "$REPO_FFMPEG"  "$ASSET_FFMPEG\$")
-    ok "envideo: ${URL_ENVIDEO##*/}"
-    ok "ffmpeg:  ${URL_FFMPEG##*/}"
+    URL_ENVIDEO=$(asset_url envideo)
+    URL_FFMPEG=$(asset_url ffmpeg)
+    ok "envideo: $(lock_field envideo tag)"
+    ok "ffmpeg:  $(lock_field ffmpeg tag)"
 fi
 if [ "$SKIP_PROTON" -eq 0 ]; then
-    URL_PROTON=$(resolve_asset "$REPO_PROTON" 'GE-Proton.*\.tar\.gz$')
-    PROTON_NAME=$(basename "$URL_PROTON" .tar.gz)
+    URL_PROTON=$(asset_url proton)
+    PROTON_NAME=$(basename "$(lock_field proton asset)" .tar.gz)
     ok "proton:  $PROTON_NAME"
     # launch-steam.sh only applies its vertex-explosion patch to directories
     # whose name starts with GE-Proton11 (or Proton 11 / Experimental / Hotfix).
@@ -183,8 +205,8 @@ if [ "$SKIP_PROTON" -eq 0 ]; then
     esac
 fi
 if [ "$SKIP_DXVK" -eq 0 ]; then
-    URL_DXVK=$(resolve_asset "$REPO_DXVK" "$ASSET_DXVK\$")
-    ok "dxvk:    ${URL_DXVK##*/}"
+    URL_DXVK=$(asset_url dxvk)
+    ok "dxvk:    $(lock_field dxvk tag)"
 fi
 
 step "Downloading"
@@ -202,6 +224,10 @@ fi
 confirm "Install now?" || die "aborted"
 
 mkdir -p "$STATE_DIR"
+# Keep the exact combination that was installed, so a bug report only has to
+# quote one version and the uninstaller knows what it is removing.
+printf '%s\n' "$SWITCHVN_VERSION" > "$STATE_DIR/version"
+cp "$LOCK_FILE" "$STATE_DIR/switchvn.lock"
 
 # --------------------------------------------------------- system libraries --
 

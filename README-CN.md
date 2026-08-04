@@ -63,6 +63,11 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 
 可用参数:`-y` 不询问,`--skip-system` / `--skip-proton` / `--skip-dxvk` 跳过某一部分。
 
+版本来自 [switchvn.lock](switchvn.lock),而不是各仓库各自的最新 release。这几个组件
+不是独立的 —— libavcodec 链接 `libenvideo.so`,而后者 SONAME 里没有版本号,配错了
+不会报链接错误,只会解码出错。锁文件里记的是一组在真机上验过的组合。想装别的组合,
+把 `SWITCHVN_LOCK` 指向你自己的锁文件即可。
+
 装完之后:
 
 1. 用 Switchdeck 的启动器重启 Steam:`~/.local/share/Steam/launch-steam.sh`
