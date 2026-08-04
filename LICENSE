@@ -1,0 +1,8 @@
+The SwitchVN installer scripts and documentation are licensed under the
+GNU General Public License version 3. See <https://www.gnu.org/licenses/gpl-3.0.html>.
+
+Each component SwitchVN installs keeps its own upstream license:
+  envideo   -  see https://github.com/BandiFee/SwitchVN-Envideo
+  FFmpeg    -  LGPL/GPL, see https://github.com/BandiFee/SwitchVN-FFmpeg
+  DXVK      -  zlib/libpng, see https://github.com/BandiFee/SwitchVN-DXVK-Sarek
+  Proton    -  see https://github.com/BandiFee/SwitchVN-ProtonGE

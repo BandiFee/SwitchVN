@@ -1,0 +1,164 @@
+# SwitchVN
+
+[English](README.md) | [简体中文](README-CN.md)
+
+Hardware video decoding for visual novels on a Nintendo Switch running
+switchroot Ubuntu.
+
+The Switch's Tegra X1 has an NVDEC hardware decoder, but Wine/Proton never
+reaches it: winedmo only ever asks FFmpeg for software decoding, and the x86
+Proton running under Box64 has no idea a native ARM FFmpeg exists on the
+system. Openings and endings drop frames, stutter, or come out black.
+
+SwitchVN connects that path, and fixes the pile of bugs found along the way.
+
+**For ordinary users: install [Switchdeck](https://github.com/SildurFX/Switchdeck)
+first, then run one command.**
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh)
+```
+
+---
+
+## What you get
+
+| Change | Fixed in |
+| --- | --- |
+| Video decodes on NVDEC; CPU load drops sharply | winedmo + envideo |
+| Video is no longer black | envideo host1x gather/reloc offsets |
+| WMV3 / VC-1 no longer black | FFmpeg envideo VC-1 null-pointer fix |
+| Skipping an opening no longer hangs the game | qasf dmowrapper lock ordering |
+| Skipping no longer raises `Error Abort 0x80040211` | winedmo wm_reader allocator handling |
+| No more tearing during playback | DXVK D3D9 present mode |
+| Unity games show the video instead of playing audio over a frozen frame | Media Foundation system-memory path on aarch64 |
+
+Measured on 20 seconds of 1080p VC-1: 13.42s of CPU time down to 3.34s.
+
+---
+
+## Requirements
+
+- A Nintendo Switch running switchroot Ubuntu (aarch64, Ubuntu 24.04 based)
+- [Switchdeck](https://github.com/SildurFX/Switchdeck) installed, with Steam
+  started through it at least once
+- Your user in the `video` group (`id -nG | grep video`; if not,
+  `sudo usermod -aG video $USER` and log out and back in)
+- `/dev/nvhost-nvdec` and `/dev/nvmap` present
+
+The installer checks all of these and tells you exactly what is missing.
+
+---
+
+## Installing
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh)
+```
+
+It does four things:
+
+1. Installs native aarch64 **envideo** and **FFmpeg** into `/usr/local` (needs
+   sudo). Box64's ffmpeg8 wrapper then redirects the x86 Proton's
+   `libavcodec.so.62` and `libavutil.so.60` onto these native libraries.
+2. Unpacks **GE-Proton11-3-SwitchVN** into
+   `~/.local/share/Steam/compatibilitytools.d/`.
+3. Puts the fixed **DXVK** inside the Proton directory and symlinks to it.
+4. Checks itself: exactly one `libenvideo.so`, and both FFmpeg sonames in the
+   linker cache.
+
+Options: `-y` to skip prompts, `--skip-system` / `--skip-proton` /
+`--skip-dxvk` to leave a part alone.
+
+Afterwards:
+
+1. Restart Steam through Switchdeck's launcher:
+   `~/.local/share/Steam/launch-steam.sh`
+2. In the game's **Properties → Compatibility**, force a specific compatibility
+   tool and pick **GE-Proton11-3-SwitchVN**.
+
+### Why DXVK goes inside the Proton directory
+
+Switchdeck's `update-switchdeck.sh` does `rm -rf $SWITCHDECK_DIR/DXVK` and
+redownloads whenever upstream DXVK-Sarek publishes a release, which would wipe
+out SwitchVN's fix.
+
+But `launch-steam.sh` guards its DXVK replacement with an idempotence check: if
+`d3d11.dll` *and* `d3d12.dll` are both already symlinks, it skips the whole
+block. So the installer keeps the DLLs in
+`$PROTON/files/lib/switchvn-dxvk/` and turns Proton's `dxvk/` and
+`vkd3d-proton/` directories into symlinks pointing there. Switchdeck then
+leaves this Proton's DXVK alone.
+
+The vertex-explosion patch is a separate `find` and still applies normally.
+That is also why the Proton directory name has to start with `GE-Proton11` —
+the installer verifies it.
+
+---
+
+## Confirming hardware decoding actually works
+
+At the command line:
+
+```bash
+/usr/local/bin/ffmpeg -hwaccel envideo -threads 1 -i yourvideo.wmv -frames:v 3 -f rawvideo -pix_fmt nv12 -y /tmp/t.nv12
+tr -d '\0' < /tmp/t.nv12 | wc -c
+```
+
+Non-zero means envideo and FFmpeg are fine. Zero means the system components
+were not installed correctly.
+
+In the game — set the launch options to:
+
+```
+WINEDEBUG=+dmo PROTON_LOG=1 %command%
+```
+
+Then after a video plays:
+
+```bash
+grep -E 'trying envideo decoding|decoding in software|no usable envideo device' ~/steam-*.log
+```
+
+`trying envideo decoding for <codec>` with no fallback line under it means it
+worked.
+
+---
+
+## Uninstalling
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninstall-switchvn.sh)
+```
+
+It removes exactly the files recorded at install time, so nothing else in
+`/usr/local` is touched. Switchdeck itself is left alone.
+
+---
+
+## Something went wrong
+
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+## Building it yourself
+
+See [docs/BUILDING.md](docs/BUILDING.md). The four component repositories:
+
+| Repository | Contents |
+| --- | --- |
+| [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo decoding, qasf deadlock fix, wm_reader fix, aarch64 MF fallback |
+| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | FFmpeg with `--enable-envideo`, VC-1 null-pointer fix |
+| [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc offset fix |
+| [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 present mode vsync fix |
+
+## Credits
+
+- [averne](https://github.com/averne) — envideo
+- [SildurFX](https://github.com/SildurFX) — Switchdeck
+- [pythonlover02](https://github.com/pythonlover02) — DXVK-Sarek
+- [GloriousEggroll](https://github.com/GloriousEggroll) — Proton-GE
+- [ptitSeb](https://github.com/ptitSeb) — Box64
+
+## License
+
+The installer scripts are GPLv3. Each component keeps its upstream license.
