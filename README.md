@@ -6,11 +6,15 @@ Hardware video decoding for visual novels on a Nintendo Switch running
 switchroot Ubuntu.
 
 The Switch's Tegra X1 has an NVDEC hardware decoder, but Wine/Proton never
-reaches it: winedmo only ever asks FFmpeg for software decoding, and the x86
-Proton running under Box64 has no idea a native ARM FFmpeg exists on the
-system. Openings and endings drop frames, stutter, or come out black.
+reaches it. Two things are in the way. winedmo only ever asks FFmpeg for
+software decoding. And the x86 Proton running under Box64 has no idea a native
+ARM FFmpeg exists on the system, so even a hardware-capable FFmpeg would be
+emulated instruction by instruction. Openings and endings drop frames, stutter,
+or come out black.
 
-SwitchVN connects that path, and fixes the pile of bugs found along the way.
+SwitchVN connects that path end to end — a Box64 wrapper that routes the x86
+FFmpeg calls onto the native ARM libraries, an envideo hwaccel in FFmpeg, and
+winedmo asking for it — then fixes the pile of bugs found along the way.
 
 **For ordinary users: install [Switchdeck](https://github.com/SildurFX/Switchdeck)
 first, then run one command.**
@@ -25,6 +29,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 
 | Change | Fixed in |
 | --- | --- |
+| The x86 Proton's FFmpeg calls land on the native ARM libraries instead of being emulated | Box64 ffmpeg8 wrapper |
 | Video decodes on NVDEC; CPU load drops sharply | winedmo + envideo |
 | Video is no longer black | envideo host1x gather/reloc offsets |
 | WMV3 / VC-1 no longer black | FFmpeg envideo VC-1 null-pointer fix |
@@ -149,14 +154,16 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Building it yourself
 
-See [docs/BUILDING.md](docs/BUILDING.md). The four component repositories:
+See [docs/BUILDING.md](docs/BUILDING.md). The component repositories:
 
 | Repository | Contents |
 | --- | --- |
 | [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo decoding, qasf deadlock fix, wm_reader fix, aarch64 MF fallback |
+| [SwitchVN-Box64](https://github.com/BandiFee/SwitchVN-Box64) | the ffmpeg8 native wrapper — libavcodec 62, libavformat 62, libavutil 60, libswscale 9 and libswresample 6 redirected to the ARM builds |
 | [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | FFmpeg with `--enable-envideo`, VC-1 null-pointer fix |
 | [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc offset fix |
 | [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 present mode vsync fix |
+| [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) | Switchdeck with the DXVK download dropped, so SwitchVN owns `Switchdeck/DXVK` |
 
 ## Credits
 

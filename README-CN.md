@@ -4,11 +4,13 @@
 
 Nintendo Switch(switchroot Ubuntu)上的 Galgame / 视觉小说视频硬件解码。
 
-Switch 的 Tegra X1 有 NVDEC 硬件解码器,但 Wine/Proton 走不到它:winedmo 只会用
-FFmpeg 的软解,而 Box64 下的 x86 Proton 又根本不知道系统里有原生的 ARM FFmpeg。
-结果就是 OP/ED 掉帧、卡顿,甚至黑屏。
+Switch 的 Tegra X1 有 NVDEC 硬件解码器,但 Wine/Proton 走不到它,中间挡着两件事:
+winedmo 只会向 FFmpeg 要软解;而 Box64 下的 x86 Proton 根本不知道系统里有原生的
+ARM FFmpeg,就算装了能硬解的 FFmpeg 也会被逐条指令模拟。结果就是 OP/ED 掉帧、
+卡顿,甚至黑屏。
 
-SwitchVN 把这条链路接通,并顺带修掉了路上撞到的一串 bug。
+SwitchVN 把整条链路接通 —— 一个 Box64 包装层把 x86 的 FFmpeg 调用转到原生 ARM 库上、
+FFmpeg 里的 envideo hwaccel、以及 winedmo 主动去要它 —— 并顺带修掉了路上撞到的一串 bug。
 
 **面向普通用户:装完 [Switchdeck](https://github.com/SildurFX/Switchdeck) 之后,再跑一条命令就行。**
 
@@ -22,6 +24,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 
 | 变化 | 修在哪 |
 | --- | --- |
+| x86 Proton 的 FFmpeg 调用落到原生 ARM 库上,不再被模拟 | Box64 ffmpeg8 包装层 |
 | 视频走 NVDEC 硬解,CPU 占用大幅下降 | winedmo + envideo |
 | 视频不再黑屏 | envideo host1x gather/reloc 偏移修复 |
 | WMV3 / VC-1 不再黑屏 | FFmpeg envideo VC-1 空指针修复 |
@@ -131,14 +134,16 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninst
 
 ## 自己编译
 
-看 [docs/BUILDING-CN.md](docs/BUILDING-CN.md)。四个组件仓库:
+看 [docs/BUILDING-CN.md](docs/BUILDING-CN.md)。组件仓库:
 
 | 仓库 | 内容 |
 | --- | --- |
 | [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo 硬解、qasf 死锁修复、wm_reader 修复、aarch64 MF 回退 |
+| [SwitchVN-Box64](https://github.com/BandiFee/SwitchVN-Box64) | ffmpeg8 原生包装层 —— libavcodec 62、libavformat 62、libavutil 60、libswscale 9、libswresample 6 重定向到 ARM 构建 |
 | [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | 带 `--enable-envideo` 的 FFmpeg,VC-1 空指针修复 |
 | [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc 偏移修复 |
 | [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 呈现模式 vsync 修复 |
+| [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) | 去掉 DXVK 下载的 Switchdeck,把 `Switchdeck/DXVK` 让给 SwitchVN |
 
 ## 致谢
 

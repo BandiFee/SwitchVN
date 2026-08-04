@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | envideo | Switch 上原生,或 `ubuntu-24.04-arm` | 1 分钟 |
 | FFmpeg | 同上 | 20~40 分钟(Switch 上) |
+| Box64 | 同上 | 5 分钟 |
 | DXVK | 任意机器交叉编译(mingw-w64) | 5 分钟 |
 | Proton | x86_64 PC + Docker | 数小时,需 60~100GB 磁盘 |
 
@@ -76,6 +77,39 @@ ldconfig -p | grep -E 'libavcodec\.so\.62|libavutil\.so\.60'
 ```bash
 echo /usr/local/lib/aarch64-linux-gnu | sudo tee /etc/ld.so.conf.d/switchvn.conf
 sudo ldconfig
+```
+
+---
+
+## Box64
+
+原生 FFmpeg 能被用上,全靠这一层。`src/wrapped/wrappedffmpeg8.c` 和它的生成文件
+把 x86 Proton 的 `libavcodec.so.62`、`libavformat.so.62`、`libavutil.so.60`、
+`libswscale.so.9`、`libswresample.so.6` 重定向到装在 `/usr/local` 的 ARM 构建上,
+这些调用于是原生执行,而不是被逐条指令模拟。
+
+```bash
+git clone https://github.com/BandiFee/SwitchVN-Box64.git
+cd SwitchVN-Box64
+cmake -S . -B build -G Ninja \
+    -DTEGRAX1=1 -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+cd build && cpack        # 产出 .deb
+```
+
+`BOX32` 保持关闭,和 Switch 上现在跑的那个一致 —— 机器上没有
+`/usr/lib/box64-i386-linux-gnu`,也没有 box32 的 binfmt 项,上游也标着 experimental。
+
+**这个包装层是全有或全无。** `wrappedffmpeg8.c` 里有一张五个库的表,每个带一个最低
+版本;任意一个缺失、过旧、或少一个必需符号,整套原生映射都会被丢掉 ——
+见 `close_ffmpeg8_libraries()`。而它只在 `LOG_DEBUG` 说一句,所以外在表现就是硬解
+莫名其妙没生效。
+
+余量很薄:目前五个库**每个都只比最低版本高一个 micro**。CI 会拿这张表和
+SwitchVN-FFmpeg 的头文件逐条比对,就是为了这个。手工构建的话自己核一下:
+
+```bash
+grep -A6 'ffmpeg8_libraries\[\] = {' src/wrapped/wrappedffmpeg8.c
 ```
 
 ---
@@ -155,6 +189,7 @@ grep -q '"mfdxgiman" not in self.compat_config' proton
 | --- | --- | --- |
 | SwitchVN-Envideo | `a7555fd` | host1x gather/reloc 少算 `mem_offset` —— 影响所有编解码器,表现为黑屏 |
 | SwitchVN-FFmpeg | `a16722a5` | VC-1 引擎 scratch map 需要 CPU 可写,否则 memset 空指针 |
+| SwitchVN-Box64 | `52b505b5` | ffmpeg8 原生包装层;没有它,x86 Proton 会模拟 FFmpeg,下游硬解做得再好也没用 |
 | SwitchVN-DXVK-Sarek | `972cd8f3` | D3D9 `CreatePresenter` 写死了非 vsync 呈现模式,导致撕裂 |
 | SwitchVN-ProtonGE | `483cd991` | winedmo 通过 envideo 硬解 |
 | SwitchVN-ProtonGE | `b88b43b4` | qasf dmowrapper 在持锁状态下 decommit 造成死锁 |
