@@ -247,6 +247,28 @@ if [ "$SKIP_SYSTEM" -eq 0 ]; then
     native FFmpeg and there will be no hardware decoding"
     done
     ok "libavcodec.so.62 and libavutil.so.60 visible to Box64"
+
+    # libenvideo.so has no version in its SONAME, so libavcodec loads whatever
+    # copy is on the system regardless of what it was compiled against. A
+    # mismatch produces wrong decoding rather than a link error, and the two
+    # releases can move independently. Both builds record their commit; compare
+    # them, because nothing at runtime will.
+    stamp_installed="/usr/local/share/switchvn/envideo-commit"
+    stamp_expected="/usr/local/share/switchvn/ffmpeg-envideo-commit"
+    if [ -r "$stamp_installed" ] && [ -r "$stamp_expected" ]; then
+        if [ "$(cat "$stamp_installed")" = "$(cat "$stamp_expected")" ]; then
+            ok "FFmpeg was built against this exact envideo"
+        else
+            warn "version skew between the two releases:"
+            warn "  envideo installed:        $(cat "$stamp_installed")"
+            warn "  FFmpeg was built against: $(cat "$stamp_expected")"
+            warn "Decoding may misbehave in ways that produce no error message."
+            warn "Reinstall once both releases have been rebuilt from the same commit."
+        fi
+    else
+        # Releases published before the stamps existed simply have no file.
+        info "no build stamps to compare (older releases do not carry them)"
+    fi
 fi
 
 # ------------------------------------------------------------------- proton --
