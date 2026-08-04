@@ -107,9 +107,11 @@ rm -rf "${STATE_DIR:?}"
 step "Done"
 cat <<'EOF'
 
-SwitchVN is removed. Switchdeck itself was not touched: the next time Steam is
-started through launch-steam.sh it will relink its own DXVK and VKD3D into the
-remaining Proton builds, as it did before SwitchVN was installed.
+SwitchVN is removed. The Proton build and system libraries are gone. The DXVK
+copy in Switchdeck/DXVK was left in place: launch-steam.sh uses it to patch the
+remaining Proton builds on every Steam launch, so removing it would leave them
+without any DXVK source. Delete that folder manually if you want Switchdeck's
+relink to have no DXVK at all.
 
 If a game was set to use the SwitchVN Proton build, change it back in the
 game's Properties -> Compatibility.

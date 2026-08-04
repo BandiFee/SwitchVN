@@ -6,7 +6,8 @@
 # Installs four prebuilt components:
 #   envideo + FFmpeg  -> /usr/local          (native aarch64, used via Box64)
 #   Proton            -> compatibilitytools.d
-#   DXVK              -> inside the Proton directory
+#   DXVK              -> inside the Proton directory + Switchdeck/DXVK (the
+#                        relink source launch-steam.sh patches other Protons from)
 #
 # Run it after Switchdeck is installed and has started Steam at least once.
 #
@@ -291,10 +292,21 @@ if [ "$SKIP_DXVK" -eq 0 ]; then
         || die "the DXVK archive does not contain x64/d3d9.dll"
     ok "DXVK unpacked into the Proton tree"
 
+    # The same archive also feeds Switchdeck's launch script: it relinks every
+    # Proton's wine/dxvk from Switchdeck/DXVK on each Steam launch, so this
+    # copy makes the SwitchVN DXVK available to any other Proton as well.
+    DX_SWITCHDECK="$SWITCHDECK_DIR/DXVK"
+    rm -rf "$DX_SWITCHDECK"
+    mkdir -p "$DX_SWITCHDECK"
+    tar -xzf "$TMPDIR_SWITCHVN/dxvk.tar.gz" -C "$DX_SWITCHDECK" --strip-components=1
+    [ -f "$DX_SWITCHDECK/x64/d3d9.dll" ] \
+        || die "the DXVK archive did not unpack to $DX_SWITCHDECK as expected"
+    ok "Switchdeck/DXVK populated (launch-steam.sh relinks other Protons from it)"
+
     # Switchdeck's launch script relinks DXVK and VKD3D unless *both* d3d11.dll
     # and d3d12.dll are already symlinks. Pointing them at copies kept inside
-    # the Proton directory satisfies that test, so update-switchdeck.sh
-    # refreshing its own DXVK folder no longer overwrites this one.
+    # the Proton directory satisfies that test, so the relink leaves this
+    # Proton alone instead of re-pointing it at Switchdeck/DXVK.
     if [ ! -d "$VK_STORE" ]; then
         mkdir -p "$VK_STORE/x64" "$VK_STORE/x32"
         if [ -f "$SWITCHDECK_DIR/VKD3D/x64/d3d12.dll" ]; then
