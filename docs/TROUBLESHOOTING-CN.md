@@ -96,7 +96,7 @@ ls -l ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-*/files/lib/wine/dxv
 这两个都是 Proton 侧的补丁修的。确认你用的确实是 SwitchVN 的 Proton:
 
 ```bash
-grep -c SwitchVN ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-3-SwitchVN/compatibilitytool.vdf
+grep -c SwitchVN ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-3-SwitchVN-1/compatibilitytool.vdf
 ```
 
 以及游戏属性里真的选中了它 —— Steam 的"默认兼容工具"设置不会覆盖单个游戏的设置,
@@ -122,7 +122,7 @@ SwitchVN 的 Proton 在 aarch64 上默认设 `WINE_DO_NOT_CREATE_DXGI_DEVICE_MAN
 
 ---
 
-## 装完之后 Steam 里看不到 GE-Proton11-3-SwitchVN
+## 装完之后 Steam 里看不到 GE-Proton11-3-SwitchVN-1
 
 必须**完全退出 Steam** 再用 Switchdeck 的启动器起来:
 

@@ -108,7 +108,7 @@ cd SwitchVN-ProtonGE
 git submodule update --init --recursive --force
 ./patches/protonprep-valve-staging.sh
 mkdir build && cd build
-../configure.sh --build-name=GE-Proton11-3-SwitchVN --container-engine=docker
+../configure.sh --build-name=GE-Proton11-3-SwitchVN-1 --container-engine=docker
 make -j$(nproc) redist
 ```
 

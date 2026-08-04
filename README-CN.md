@@ -57,7 +57,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 1. 把原生 aarch64 的 **envideo** 和 **FFmpeg** 装进 `/usr/local`(需要 sudo)。
    Box64 的 ffmpeg8 包装层会自动把 x86 Proton 里的 `libavcodec.so.62` /
    `libavutil.so.60` 重定向到这两个原生库上。
-2. 把 **GE-Proton11-3-SwitchVN** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
+2. 把 **GE-Proton11-3-SwitchVN-1** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
 3. 把修好的 **DXVK** 放进 Proton 目录内部,再做符号链接。
 4. 自检:`libenvideo.so` 只能有一份,两个 FFmpeg soname 必须在 ld 缓存里。
 
@@ -71,7 +71,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 装完之后:
 
 1. 用 Switchdeck 的启动器重启 Steam:`~/.local/share/Steam/launch-steam.sh`
-2. 在游戏的 **属性 → 兼容性** 里勾选强制使用兼容工具,选 **GE-Proton11-3-SwitchVN**
+2. 在游戏的 **属性 → 兼容性** 里勾选强制使用兼容工具,选 **GE-Proton11-3-SwitchVN-1**
 
 ### 为什么 DXVK 要塞进 Proton 目录里
 

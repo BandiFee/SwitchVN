@@ -15,11 +15,11 @@ SWITCHVN_VERSION 1.0
 
 envideo BandiFee/SwitchVN-Envideo     switchvn-envideo-1.0.0-1 switchvn-envideo-aarch64.tar.gz
 ffmpeg  BandiFee/SwitchVN-FFmpeg      switchvn-ffmpeg-8.1.1-1  switchvn-ffmpeg-aarch64.tar.gz
-dxvk    BandiFee/SwitchVN-DXVK-Sarek  switchvn-dxvk-1.12.1-1   switchvn-dxvk.tar.gz
+dxvk    BandiFee/SwitchVN-DXVK-Sarek  switchvn-dxvk-1.12.0-1   switchvn-dxvk.tar.gz
 box64   BandiFee/SwitchVN-Box64       switchvn-box64-0.4.5-1   switchvn-box64.deb
 
 # Proton keeps upstream's naming: Switchdeck's launch-steam.sh decides whether
 # to apply its vertex-explosion patch by matching the directory name against
 # GE-Proton11*, and the build name comes from the tag. A revision suffix has to
 # keep that prefix intact.
-proton  BandiFee/SwitchVN-ProtonGE    GE-Proton11-3-SwitchVN   GE-Proton11-3-SwitchVN.tar.gz
+proton  BandiFee/SwitchVN-ProtonGE    GE-Proton11-3-SwitchVN-1 GE-Proton11-3-SwitchVN-1.tar.gz

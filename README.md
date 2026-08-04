@@ -61,7 +61,7 @@ It does four things:
 1. Installs native aarch64 **envideo** and **FFmpeg** into `/usr/local` (needs
    sudo). Box64's ffmpeg8 wrapper then redirects the x86 Proton's
    `libavcodec.so.62` and `libavutil.so.60` onto these native libraries.
-2. Unpacks **GE-Proton11-3-SwitchVN** into
+2. Unpacks **GE-Proton11-3-SwitchVN-1** into
    `~/.local/share/Steam/compatibilitytools.d/`.
 3. Puts the fixed **DXVK** inside the Proton directory and symlinks to it.
 4. Checks itself: exactly one `libenvideo.so`, and both FFmpeg sonames in the
@@ -82,7 +82,7 @@ Afterwards:
 1. Restart Steam through Switchdeck's launcher:
    `~/.local/share/Steam/launch-steam.sh`
 2. In the game's **Properties → Compatibility**, force a specific compatibility
-   tool and pick **GE-Proton11-3-SwitchVN**.
+   tool and pick **GE-Proton11-3-SwitchVN-1**.
 
 ### Why DXVK goes inside the Proton directory
 

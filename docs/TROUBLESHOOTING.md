@@ -107,7 +107,7 @@ Both are fixed by Proton-side patches. Confirm you are really running the
 SwitchVN Proton:
 
 ```bash
-grep -c SwitchVN ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-3-SwitchVN/compatibilitytool.vdf
+grep -c SwitchVN ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-3-SwitchVN-1/compatibilitytool.vdf
 ```
 
 And that the game itself is set to use it. Steam's global "default
@@ -137,7 +137,7 @@ compat config in Steam's compatibility options.
 
 ---
 
-## GE-Proton11-3-SwitchVN does not appear in Steam
+## GE-Proton11-3-SwitchVN-1 does not appear in Steam
 
 Quit Steam **completely**, then start it through Switchdeck's launcher:
 
