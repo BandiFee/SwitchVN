@@ -27,6 +27,15 @@ set -euo pipefail
 RELEASES="https://github.com/BandiFee/SwitchVN/releases"
 LOCK_LATEST_URL="$RELEASES/latest/download/switchvn.lock"
 
+# Switchdeck lays the ground SwitchVN builds on: Steam itself, the launcher that
+# relinks DXVK into every Proton, and the vertex-explosion patch. SwitchVN's
+# fork additionally drops the DXVK download, because SwitchVN owns that folder.
+#
+# Not pinned in switchvn.lock, because Switchdeck updates itself from this same
+# branch on every Steam launch - pinning here would only disagree with what the
+# machine converges to anyway.
+SWITCHDECK_INSTALLER="https://raw.githubusercontent.com/BandiFee/SwitchVN-Switchdeck/main/install-steam.sh"
+
 # SWITCHVN_LOCK takes a path or a URL and wins over everything: it is how a
 # candidate combination gets tested before it is tagged.
 LOCK_FILE="${SWITCHVN_LOCK:-}"
@@ -44,6 +53,8 @@ ASSUME_YES=0
 SKIP_SYSTEM=0
 SKIP_PROTON=0
 SKIP_DXVK=0
+SKIP_SWITCHDECK=0
+REINSTALL_SWITCHDECK=0
 
 # ------------------------------------------------------------------ helpers --
 
@@ -64,12 +75,15 @@ usage() {
     cat <<'EOF'
 Usage: install-switchvn.sh [options]
 
-  -y, --yes           Do not ask for confirmation.
+  -y, --yes           Do not ask for confirmation. An existing Switchdeck is
+                      kept; use --reinstall-switchdeck to replace it.
       --version VER   Install a specific SwitchVN version instead of the
                       latest one, e.g. --version 1.0.
       --skip-system   Do not touch /usr/local (no envideo/FFmpeg install).
       --skip-proton   Do not install Proton.
       --skip-dxvk     Do not install DXVK into Proton.
+      --skip-switchdeck      Never install or reinstall Switchdeck.
+      --reinstall-switchdeck Reinstall Switchdeck even if it is present.
   -h, --help          Show this message.
 
 Environment:
@@ -91,6 +105,8 @@ while [ $# -gt 0 ]; do
         --skip-system) SKIP_SYSTEM=1 ;;
         --skip-proton) SKIP_PROTON=1 ;;
         --skip-dxvk)   SKIP_DXVK=1 ;;
+        --skip-switchdeck)      SKIP_SWITCHDECK=1 ;;
+        --reinstall-switchdeck) REINSTALL_SWITCHDECK=1 ;;
         -h|--help)     usage; exit 0 ;;
         *)             usage >&2; die "unknown option: $1" ;;
     esac
@@ -103,6 +119,16 @@ confirm() {
     printf '\n%s [Y/n] ' "$1"
     read -r reply </dev/tty || reply=""
     case "$reply" in ''|y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# Same, but a bare Enter means no, and -y does not answer it. For steps that
+# throw something away: agreeing has to be deliberate, and "stop asking me
+# questions" is not the same as "yes, wipe it".
+confirm_destructive() {
+    local reply
+    printf '\n%s [y/N] ' "$1"
+    read -r reply </dev/tty || reply=""
+    case "$reply" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
 }
 
 # Reads one field of one component out of the lock file.
@@ -153,23 +179,6 @@ for cmd in wget tar sed grep; do
 done
 ok "aarch64, required tools present"
 
-[ -d "$SWITCHDECK_DIR" ] \
-    || die "Switchdeck was not found at $SWITCHDECK_DIR.
-    Install Switchdeck first (https://github.com/SildurFX/Switchdeck) and start
-    Steam once, then run this again."
-ok "Switchdeck found"
-
-# Box64 runs the x86 Proton, and its ffmpeg8 wrapper is what puts the native
-# FFmpeg in front of the emulated one. The version matters: the wrapper checks
-# a minimum for each of the five FFmpeg libraries and drops the whole native set
-# if one falls short, saying so only at LOG_DEBUG. So SwitchVN installs the
-# build pinned in the lock rather than accepting whatever is already there.
-if command -v box64 >/dev/null 2>&1; then
-    ok "box64 present: $(box64 -v 2>/dev/null | head -1 || echo unknown)"
-else
-    info "box64 is not installed yet; the lock's build will be installed"
-fi
-
 # The decoder talks to the Tegra multimedia engines through these nodes.
 missing_nodes=""
 for node in /dev/nvhost-nvdec /dev/nvmap; do
@@ -191,12 +200,79 @@ if [ "$SKIP_SYSTEM" -eq 0 ]; then
     sudo -v || die "sudo is needed to install envideo and FFmpeg into /usr/local"
 fi
 
-# ----------------------------------------------------------------- download --
+# --------------------------------------------------------------- switchdeck --
+#
+# This runs before anything of SwitchVN's is written, and that ordering is not
+# cosmetic: install-steam.sh clears $STEAMROOT except for a short keep-list that
+# includes neither Switchdeck/ nor SwitchVN/. Running it afterwards would delete
+# the state directory the uninstaller reads and the DXVK folder launch-steam.sh
+# relinks every Proton from.
 
-step "Reading the component lock"
+step "Checking Switchdeck"
 
 TMPDIR_SWITCHVN=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_SWITCHVN"' EXIT
+
+run_switchdeck_installer() {
+    local script="$TMPDIR_SWITCHVN/install-steam.sh"
+    info "fetching the SwitchVN-Switchdeck installer"
+    wget -qO "$script" "$SWITCHDECK_INSTALLER" \
+        || die "cannot download the Switchdeck installer from
+    $SWITCHDECK_INSTALLER"
+    [ -s "$script" ] || die "the Switchdeck installer came back empty"
+
+    step "Running the Switchdeck installer"
+    info "this installs Steam, Box64 and the launcher, and takes a while"
+    # It expects a terminal for its own prompts, so it is not piped anywhere.
+    bash "$script" || die "the Switchdeck installer failed; SwitchVN needs it in
+    place before it can continue"
+    [ -d "$SWITCHDECK_DIR" ] \
+        || die "the Switchdeck installer finished but $SWITCHDECK_DIR is missing"
+    ok "Switchdeck installed"
+}
+
+if [ "$SKIP_SWITCHDECK" -eq 1 ]; then
+    [ -d "$SWITCHDECK_DIR" ] \
+        || die "--skip-switchdeck was given but Switchdeck is not installed.
+    SwitchVN builds on it: Steam, the launcher that relinks DXVK into every
+    Proton, and the vertex-explosion patch all come from there."
+    ok "Switchdeck present, left alone as asked"
+elif [ ! -d "$SWITCHDECK_DIR" ]; then
+    info "Switchdeck is not installed"
+    confirm "Install SwitchVN-Switchdeck now? SwitchVN cannot work without it." \
+        || die "aborted; Switchdeck is required"
+    run_switchdeck_installer
+elif [ "$REINSTALL_SWITCHDECK" -eq 1 ]; then
+    warn "reinstalling Switchdeck; this resets Steam's configuration"
+    run_switchdeck_installer
+else
+    ok "Switchdeck found at $SWITCHDECK_DIR"
+    # confirm_destructive, not confirm: reinstalling clears most of $STEAMROOT,
+    # so it needs a deliberate yes. -y means "stop asking me", which is not the
+    # same answer.
+    if [ "$ASSUME_YES" -eq 1 ]; then
+        info "keeping it (pass --reinstall-switchdeck to replace it)"
+    elif confirm_destructive "Reinstall it? Only needed if Steam itself is broken - this clears most of Steam's configuration."; then
+        run_switchdeck_installer
+    else
+        info "keeping the existing Switchdeck"
+    fi
+fi
+
+# Box64 runs the x86 Proton, and its ffmpeg8 wrapper is what puts the native
+# FFmpeg in front of the emulated one. The version matters: the wrapper checks a
+# minimum for each of the five FFmpeg libraries and drops the whole native set if
+# one falls short, saying so only at LOG_DEBUG. Switchdeck installs a working
+# Box64; SwitchVN then replaces it with the revision its lock pins.
+if command -v box64 >/dev/null 2>&1; then
+    ok "box64 present: $(box64 -v 2>/dev/null | head -1 || echo unknown)"
+else
+    info "box64 is not installed yet; the lock's build will be installed"
+fi
+
+# ----------------------------------------------------------------- download --
+
+step "Reading the component lock"
 
 fetch_lock() {
     local url="$1" what="$2" dest="$TMPDIR_SWITCHVN/switchvn.lock"
