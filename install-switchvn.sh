@@ -48,6 +48,7 @@ STATE_DIR="$STEAMROOT/SwitchVN"
 
 LDSOCONF="/etc/ld.so.conf.d/switchvn.conf"
 FFMPEG_LIBDIR="/usr/local/lib/aarch64-linux-gnu"
+FFMPEG_BIN="/usr/local/bin/ffmpeg"
 
 ASSUME_YES=0
 SKIP_SYSTEM=0
@@ -55,6 +56,7 @@ SKIP_PROTON=0
 SKIP_DXVK=0
 SKIP_SWITCHDECK=0
 REINSTALL_SWITCHDECK=0
+FORCE=0
 
 # ------------------------------------------------------------------ helpers --
 
@@ -84,6 +86,9 @@ Usage: install-switchvn.sh [options]
       --skip-dxvk     Do not install DXVK into Proton.
       --skip-switchdeck      Never install or reinstall Switchdeck.
       --reinstall-switchdeck Reinstall Switchdeck even if it is present.
+  -f, --force         Reinstall components that are already at the locked
+                      version. Without it they are left alone and not even
+                      downloaded.
   -h, --help          Show this message.
 
 Environment:
@@ -107,6 +112,7 @@ while [ $# -gt 0 ]; do
         --skip-dxvk)   SKIP_DXVK=1 ;;
         --skip-switchdeck)      SKIP_SWITCHDECK=1 ;;
         --reinstall-switchdeck) REINSTALL_SWITCHDECK=1 ;;
+        -f|--force)    FORCE=1 ;;
         -h|--help)     usage; exit 0 ;;
         *)             usage >&2; die "unknown option: $1" ;;
     esac
@@ -309,77 +315,142 @@ SWITCHVN_VERSION=$(awk '$1 == "SWITCHVN_VERSION" { print $2; exit }' "$LOCK_FILE
 [ -n "$SWITCHVN_VERSION" ] || die "the lock file has no SWITCHVN_VERSION"
 ok "SwitchVN $SWITCHVN_VERSION"
 
-# Compare against what is already installed, so a reinstall says what it is
-# about to change instead of silently swapping components underneath.
+# --------------------------------------------------------------- what is on --
+
+step "Comparing with what is installed"
+
 PREV_LOCK="$STATE_DIR/switchvn.lock"
-if [ -r "$PREV_LOCK" ]; then
-    prev_version=$(awk '$1 == "SWITCHVN_VERSION" { print $2; exit }' "$PREV_LOCK")
-    if [ "$prev_version" = "$SWITCHVN_VERSION" ]; then
-        info "SwitchVN $SWITCHVN_VERSION is already installed; reinstalling it"
-    else
-        info "upgrading from SwitchVN ${prev_version:-unknown}"
+PROTON_NAME=$(basename "$(lock_field proton asset)" .tar.gz)
+
+# Is the component's payload actually on disk? The recorded lock says what was
+# installed last time, but files can go missing on their own - a Switchdeck
+# reinstall clears $STEAMROOT, and /usr/local can be tidied by hand - so the
+# record alone is not enough to conclude anything is still there.
+component_present() {
+    case "$1" in
+        envideo) [ -e /usr/local/lib/libenvideo.so ] ;;
+        ffmpeg)  [ -e "$FFMPEG_LIBDIR/libavcodec.so.62" ] ;;
+        box64)   command -v box64 >/dev/null 2>&1 ;;
+        proton)  [ -d "$COMPATTOOLS/$PROTON_NAME/files" ] ;;
+        dxvk)    [ -e "$COMPATTOOLS/$PROTON_NAME/files/lib/switchvn-dxvk/x64/d3d9.dll" ] ;;
+        *)       return 1 ;;
+    esac
+}
+
+# What the system reports about itself, for the summary only. Never used to
+# decide anything: these strings are formatted differently from the tags, so
+# deriving one from the other would be guesswork.
+component_reported() {
+    case "$1" in
+        envideo) PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion envideo 2>/dev/null ;;
+        ffmpeg)  "$FFMPEG_BIN" -version 2>/dev/null | head -1 | sed -n 's/^ffmpeg version \([^ ]*\).*/\1/p' ;;
+        box64)   box64 -v 2>/dev/null | head -1 | sed -n 's/.* \(v[0-9][^ ]*\).*/\1/p' ;;
+        proton)  [ -d "$COMPATTOOLS/$PROTON_NAME/files" ] && printf '%s' "$PROTON_NAME" ;;
+        dxvk)    strings "$COMPATTOOLS/$PROTON_NAME/files/lib/switchvn-dxvk/x64/d3d9.dll" 2>/dev/null \
+                     | grep -m1 -oE 'v[0-9]+\.[0-9]+\.[0-9]+-SwitchVN[-0-9]*' ;;
+    esac
+}
+
+NEEDED=""      # components this run will download and install
+UPTODATE=""
+
+prev_version=""
+[ -r "$PREV_LOCK" ] && prev_version=$(awk '$1 == "SWITCHVN_VERSION" { print $2; exit }' "$PREV_LOCK")
+if [ -z "$prev_version" ]; then
+    info "no previous SwitchVN install recorded"
+elif [ "$prev_version" = "$SWITCHVN_VERSION" ]; then
+    info "SwitchVN $SWITCHVN_VERSION is already recorded as installed"
+else
+    info "upgrading from SwitchVN $prev_version to $SWITCHVN_VERSION"
+fi
+
+# The --skip-* flags decide alongside the version comparison rather than after
+# it, so the table below is what the run will actually do.
+skipped_by_flag() {
+    case "$1" in
+        envideo|ffmpeg|box64) [ "$SKIP_SYSTEM" -eq 1 ] ;;
+        proton)               [ "$SKIP_PROTON" -eq 1 ] ;;
+        dxvk)                 [ "$SKIP_DXVK"   -eq 1 ] ;;
+        *)                    return 1 ;;
+    esac
+}
+
+printf '\n    %-9s %-26s %s\n' "COMPONENT" "WANTED" "STATUS"
+for c in envideo ffmpeg box64 dxvk proton; do
+    want=$(lock_field "$c" tag)
+    if skipped_by_flag "$c"; then
+        printf '    %-9s %-26s %s\n' "$c" "$want" "skipped"
+        continue
     fi
+    have=$(awk -v n="$c" '$1 == n && NF >= 4 { print $3; exit }' "$PREV_LOCK" 2>/dev/null || true)
+    reported=$(component_reported "$c" || true)
 
-    changed=""
-    for c in envideo ffmpeg dxvk box64 proton; do
-        old=$(awk -v n="$c" '$1 == n && NF >= 4 { print $3; exit }' "$PREV_LOCK")
-        new=$(awk -v n="$c" '$1 == n && NF >= 4 { print $3; exit }' "$LOCK_FILE")
-        [ -n "$old" ] && [ "$old" != "$new" ] || continue
-        info "  $c: $old -> $new"
-        changed="$changed $c"
-    done
-    [ -n "$changed" ] || info "  no component changes"
+    if ! component_present "$c"; then
+        status="not installed"
+        NEEDED="$NEEDED $c"
+    elif [ "$FORCE" -eq 1 ]; then
+        status="reinstall (--force)"
+        NEEDED="$NEEDED $c"
+    elif [ -z "$have" ]; then
+        # Present, but this installer did not put it there, so there is nothing
+        # to compare the tag against.
+        status="present, unknown version${reported:+ ($reported)}"
+        NEEDED="$NEEDED $c"
+    elif [ "$have" != "$want" ]; then
+        status="update from $have"
+        NEEDED="$NEEDED $c"
+    else
+        status="up to date${reported:+ ($reported)}"
+        UPTODATE="$UPTODATE $c"
+    fi
+    printf '    %-9s %-26s %s\n' "$c" "$want" "$status"
+done
+printf '\n'
 
-    # libavcodec links libenvideo.so, whose SONAME carries no version, so the
-    # loader accepts any copy and a mismatched pair misdecodes rather than
-    # failing to link. The two only ever move together.
-    case "$changed" in
-        *envideo*ffmpeg*|*ffmpeg*envideo*) ;;
-        *envideo*|*ffmpeg*)
-            die "this lock moves only one of envideo and FFmpeg.
-    They are built against each other and have to move together; installing
-    them apart produces bad decoding with no error message." ;;
-    esac
+# True when this run will install the component.
+needs() { case " $NEEDED " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# libavcodec links libenvideo.so, whose SONAME carries no version, so the loader
+# accepts any copy and a mismatched pair misdecodes rather than failing to link.
+# Reinstalling one without the other is how that happens.
+case " $NEEDED " in
+    *" envideo "*" ffmpeg "*|*" ffmpeg "*" envideo "*) ;;
+    *" envideo "*|*" ffmpeg "*)
+        info "envideo and FFmpeg are built against each other, so both are being installed"
+        case " $NEEDED " in *" envideo "*) NEEDED="$NEEDED ffmpeg" ;; *) NEEDED="$NEEDED envideo" ;; esac ;;
+esac
+
+# DXVK lives inside the Proton directory, which is replaced wholesale, so a
+# Proton install takes the DXVK with it. Decide this before downloading, or the
+# install step would reach for an archive that was never fetched.
+if needs proton && ! needs dxvk && [ "$SKIP_DXVK" -eq 0 ]; then
+    info "Proton is being replaced, so its DXVK is reinstalled with it"
+    NEEDED="$NEEDED dxvk"
 fi
 
-if [ "$SKIP_SYSTEM" -eq 0 ]; then
-    URL_ENVIDEO=$(asset_url envideo)
-    URL_FFMPEG=$(asset_url ffmpeg)
-    URL_BOX64=$(asset_url box64)
-    ok "envideo: $(lock_field envideo tag)"
-    ok "ffmpeg:  $(lock_field ffmpeg tag)"
-    ok "box64:   $(lock_field box64 tag)"
+if [ -z "${NEEDED// /}" ]; then
+    ok "everything is already at the locked versions; nothing to download"
+    info "pass --force to reinstall anyway"
+    exit 0
 fi
-if [ "$SKIP_PROTON" -eq 0 ]; then
-    URL_PROTON=$(asset_url proton)
-    PROTON_NAME=$(basename "$(lock_field proton asset)" .tar.gz)
-    ok "proton:  $PROTON_NAME"
-    # launch-steam.sh only applies its vertex-explosion patch to directories
-    # whose name starts with GE-Proton11 (or Proton 11 / Experimental / Hotfix).
-    # A rename here would silently cost 32-bit games their geometry.
-    case "$PROTON_NAME" in
-        GE-Proton11*) ;;
-        *) die "the Proton build is named '$PROTON_NAME', which Switchdeck's
+
+# launch-steam.sh only applies its vertex-explosion patch to directories whose
+# name starts with GE-Proton11 (or Proton 11 / Experimental / Hotfix). A rename
+# here would silently cost 32-bit games their geometry, so check it even when
+# Proton itself is not being installed - DXVK is placed inside that directory.
+case "$PROTON_NAME" in
+    GE-Proton11*) ;;
+    *) die "the Proton build is named '$PROTON_NAME', which Switchdeck's
     launch script will not recognise. It must start with 'GE-Proton11'." ;;
-    esac
-fi
-if [ "$SKIP_DXVK" -eq 0 ]; then
-    URL_DXVK=$(asset_url dxvk)
-    ok "dxvk:    $(lock_field dxvk tag)"
-fi
+esac
 
 step "Downloading"
-if [ "$SKIP_SYSTEM" -eq 0 ]; then
-    fetch "$URL_ENVIDEO" "$TMPDIR_SWITCHVN/envideo.tar.gz"
-    fetch "$URL_FFMPEG"  "$TMPDIR_SWITCHVN/ffmpeg.tar.gz"
-    fetch "$URL_BOX64"   "$TMPDIR_SWITCHVN/box64.deb"
-fi
-if [ "$SKIP_PROTON" -eq 0 ]; then
-    fetch "$URL_PROTON" "$TMPDIR_SWITCHVN/proton.tar.gz"
-fi
-if [ "$SKIP_DXVK" -eq 0 ]; then
-    fetch "$URL_DXVK" "$TMPDIR_SWITCHVN/dxvk.tar.gz"
-fi
+needs envideo && fetch "$(asset_url envideo)" "$TMPDIR_SWITCHVN/envideo.tar.gz"
+needs ffmpeg  && fetch "$(asset_url ffmpeg)"  "$TMPDIR_SWITCHVN/ffmpeg.tar.gz"
+needs box64   && fetch "$(asset_url box64)"   "$TMPDIR_SWITCHVN/box64.deb"
+needs proton  && fetch "$(asset_url proton)"  "$TMPDIR_SWITCHVN/proton.tar.gz"
+needs dxvk    && fetch "$(asset_url dxvk)"    "$TMPDIR_SWITCHVN/dxvk.tar.gz"
+true
 
 confirm "Install now?" || die "aborted"
 
@@ -391,7 +462,7 @@ cp "$LOCK_FILE" "$STATE_DIR/switchvn.lock"
 
 # --------------------------------------------------------- system libraries --
 
-if [ "$SKIP_SYSTEM" -eq 0 ]; then
+if needs envideo || needs ffmpeg; then
     step "Installing envideo and FFmpeg into /usr/local"
 
     # An older envideo left in /usr/lib or a second copy in /usr/local would be
@@ -409,7 +480,9 @@ if [ "$SKIP_SYSTEM" -eq 0 ]; then
     printf '/usr/local/lib\n%s\n' "$FFMPEG_LIBDIR" | sudo tee "$LDSOCONF" >/dev/null
     sudo ldconfig
     ok "ldconfig updated"
+fi
 
+if needs box64; then
     step "Installing Box64"
 
     # The package declares Conflicts/Replaces on box64-tegrax1, so dpkg swaps
@@ -421,7 +494,9 @@ if [ "$SKIP_SYSTEM" -eq 0 ]; then
     package it names has to be removed first:  sudo apt-get remove <name>"
     printf 'box64\n' > "$STATE_DIR/box64.package"
     ok "$(box64 -v 2>/dev/null | head -1 || echo 'box64 installed')"
+fi
 
+if [ "$SKIP_SYSTEM" -eq 0 ]; then
     step "Verifying the native libraries"
 
     ver=$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion envideo 2>/dev/null || true)
@@ -471,31 +546,27 @@ fi
 
 # ------------------------------------------------------------------- proton --
 
-PROTON_DIR=""
-if [ "$SKIP_PROTON" -eq 0 ]; then
+PROTON_DIR="$COMPATTOOLS/$PROTON_NAME"
+if needs proton; then
     step "Installing Proton"
 
     mkdir -p "$COMPATTOOLS"
-    PROTON_DIR="$COMPATTOOLS/$PROTON_NAME"
 
-    if [ -e "$PROTON_DIR" ]; then
-        confirm "$PROTON_NAME already exists. Replace it?" || die "aborted"
-        rm -rf "$PROTON_DIR"
-    fi
+    # Replacing without asking: the survey already said this is an install or an
+    # update, and the directory holds nothing the user put there. DXVK lives
+    # inside it and is reinstalled below.
+    rm -rf "${PROTON_DIR:?}"
 
     tar -xzf "$TMPDIR_SWITCHVN/proton.tar.gz" -C "$COMPATTOOLS"
     [ -d "$PROTON_DIR/files" ] \
         || die "the Proton archive did not unpack to $PROTON_DIR as expected"
     ok "installed to $PROTON_DIR"
     printf '%s\n' "$PROTON_NAME" > "$STATE_DIR/proton_name"
-elif [ -f "$STATE_DIR/proton_name" ]; then
-    PROTON_NAME=$(cat "$STATE_DIR/proton_name")
-    PROTON_DIR="$COMPATTOOLS/$PROTON_NAME"
 fi
 
 # --------------------------------------------------------------------- dxvk --
 
-if [ "$SKIP_DXVK" -eq 0 ]; then
+if needs dxvk; then
     step "Installing DXVK into Proton"
 
     [ -n "$PROTON_DIR" ] && [ -d "$PROTON_DIR/files" ] \
