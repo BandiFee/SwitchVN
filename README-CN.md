@@ -15,7 +15,8 @@ FFmpeg 里的 envideo hwaccel、以及 winedmo 主动去要它 —— 并顺带�
 **面向普通用户:装完 [Switchdeck](https://github.com/SildurFX/Switchdeck) 之后,再跑一条命令就行。**
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh)
+curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \
+  && bash /tmp/install-switchvn.sh
 ```
 
 ---
@@ -52,7 +53,8 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 ## 安装
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh)
+curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \
+  && bash /tmp/install-switchvn.sh
 ```
 
 它做四件事:
@@ -66,10 +68,29 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/instal
 
 可用参数:`-y` 不询问,`--skip-system` / `--skip-proton` / `--skip-dxvk` 跳过某一部分。
 
-版本来自 [switchvn.lock](switchvn.lock),而不是各仓库各自的最新 release。这几个组件
-不是独立的 —— libavcodec 链接 `libenvideo.so`,而后者 SONAME 里没有版本号,配错了
-不会报链接错误,只会解码出错。锁文件里记的是一组在真机上验过的组合。想装别的组合,
-把 `SWITCHVN_LOCK` 指向你自己的锁文件即可。
+### 版本
+
+SwitchVN 的版本号代表**一组在真机上一起验过的组件组合**,不是功能版本。这几个组件
+不是独立的:libavcodec 链接 `libenvideo.so`,而后者 SONAME 里没有版本号,加载器
+来者不拒,配错了不会报链接错误,只会解码出错。
+
+组合记在 [switchvn.lock](switchvn.lock) 里,作为每个 release 的资产发布。安装器先取
+对应版本的 lock,再按里面写死的 tag 下载组件。
+
+```bash
+bash /tmp/install-switchvn.sh                  # 最新版
+bash /tmp/install-switchvn.sh --version 1.0    # 指定版本
+```
+
+重装时会打印哪些组件要变;如果某份 lock 只动了 envideo 和 FFmpeg 中的一个,直接拒绝。
+
+想试还没发布的组合,把 `SWITCHVN_LOCK` 指向一个 lock 文件或 URL —— 候选版就是这么
+在打 tag 之前验证的:
+
+```bash
+SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.lock \
+  bash /tmp/install-switchvn.sh
+```
 
 装完之后:
 
@@ -121,7 +142,8 @@ grep -E 'trying envideo decoding|decoding in software|no usable envideo device' 
 ## 卸载
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninstall-switchvn.sh)
+curl -fsSL -o /tmp/uninstall-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninstall-switchvn.sh \
+  && bash /tmp/uninstall-switchvn.sh
 ```
 
 按安装时记下的文件清单删除,不会误删 `/usr/local` 里别的东西。Switchdeck 本身不动。
@@ -134,7 +156,8 @@ bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninst
 
 ## 自己编译
 
-看 [docs/BUILDING-CN.md](docs/BUILDING-CN.md)。组件仓库:
+看 [docs/BUILDING-CN.md](docs/BUILDING-CN.md);发版流程见
+[docs/RELEASING-CN.md](docs/RELEASING-CN.md)。组件仓库:
 
 | 仓库 | 内容 |
 | --- | --- |

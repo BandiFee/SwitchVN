@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, next ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax and lint
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          bash -n install-switchvn.sh
+          bash -n uninstall-switchvn.sh
+          shellcheck -S warning install-switchvn.sh uninstall-switchvn.sh
+
+      - name: Lock file format
+        run: |
+          python3 .github/scripts/check_lock.py switchvn.lock
+
+      - name: Every locked asset is downloadable
+        # The lock is only worth anything if the tags it names still exist.
+        # Deleting a tag takes its release with it, which has already happened
+        # once here, and the installer would then fail at download time on the
+        # user's machine instead of in CI.
+        run: |
+          fail=0
+          while read -r name repo tag asset; do
+            case "$name" in ''|\#*|SWITCHVN_VERSION) continue ;; esac
+            [ -n "${asset:-}" ] || continue
+            url="https://github.com/$repo/releases/download/$tag/$asset"
+            code=$(curl -sIL -o /dev/null -w '%{http_code}' "$url")
+            if [ "$code" = 200 ]; then
+              printf 'ok   %-8s %s\n' "$name" "$tag"
+            else
+              printf 'FAIL %-8s %s -> HTTP %s\n' "$name" "$tag" "$code"
+              echo "::error::$name asset is not downloadable: $url ($code)"
+              fail=1
+            fi
+          done < switchvn.lock
+          exit $fail
+
+      - name: Cross-repository pins agree with the lock
+        # SwitchVN-FFmpeg builds against a pinned envideo tag and SwitchVN-Box64
+        # checks its wrapper against a pinned FFmpeg tag. Those pins are kept by
+        # hand, and one of them has already been left naming a tag that had been
+        # deleted, which would have failed the next build.
+        run: |
+          python3 .github/scripts/check_pins.py switchvn.lock

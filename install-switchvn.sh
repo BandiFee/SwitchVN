@@ -19,8 +19,18 @@ set -euo pipefail
 
 # Component versions come from switchvn.lock rather than from each repository's
 # latest release: "latest of each" is a combination nobody has run.
-LOCK_URL="https://raw.githubusercontent.com/BandiFee/SwitchVN/main/switchvn.lock"
+#
+# The lock ships as a release asset. GitHub redirects these two paths, so no
+# API call is involved - no rate limit, and no window where a release published
+# mid-install changes the answer. It also leaves main free to move: what users
+# get is whatever was last tagged, not the tip of the branch.
+RELEASES="https://github.com/BandiFee/SwitchVN/releases"
+LOCK_LATEST_URL="$RELEASES/latest/download/switchvn.lock"
+
+# SWITCHVN_LOCK takes a path or a URL and wins over everything: it is how a
+# candidate combination gets tested before it is tagged.
 LOCK_FILE="${SWITCHVN_LOCK:-}"
+WANT_VERSION="${SWITCHVN_VERSION:-}"
 
 STEAMROOT="$HOME/.local/share/Steam"
 SWITCHDECK_DIR="$STEAMROOT/Switchdeck"
@@ -54,11 +64,19 @@ usage() {
     cat <<'EOF'
 Usage: install-switchvn.sh [options]
 
-  -y, --yes         Do not ask for confirmation.
-      --skip-system Do not touch /usr/local (no envideo/FFmpeg install).
-      --skip-proton Do not install Proton.
-      --skip-dxvk   Do not install DXVK into Proton.
-  -h, --help        Show this message.
+  -y, --yes           Do not ask for confirmation.
+      --version VER   Install a specific SwitchVN version instead of the
+                      latest one, e.g. --version 1.0.
+      --skip-system   Do not touch /usr/local (no envideo/FFmpeg install).
+      --skip-proton   Do not install Proton.
+      --skip-dxvk     Do not install DXVK into Proton.
+  -h, --help          Show this message.
+
+Environment:
+  SWITCHVN_VERSION    Same as --version.
+  SWITCHVN_LOCK       Path or URL of a switchvn.lock to use instead of a
+                      published one. This is how a candidate combination is
+                      tested before it gets tagged.
 
 Without --skip-system the script needs sudo to write to /usr/local.
 EOF
@@ -67,6 +85,9 @@ EOF
 while [ $# -gt 0 ]; do
     case "$1" in
         -y|--yes)      ASSUME_YES=1 ;;
+        --version)     [ $# -ge 2 ] || die "--version needs a version, e.g. --version 1.0"
+                       WANT_VERSION="$2"; shift ;;
+        --version=*)   WANT_VERSION="${1#*=}" ;;
         --skip-system) SKIP_SYSTEM=1 ;;
         --skip-proton) SKIP_PROTON=1 ;;
         --skip-dxvk)   SKIP_DXVK=1 ;;
@@ -172,18 +193,73 @@ step "Reading the component lock"
 TMPDIR_SWITCHVN=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_SWITCHVN"' EXIT
 
+fetch_lock() {
+    local url="$1" what="$2" dest="$TMPDIR_SWITCHVN/switchvn.lock"
+    wget -qO "$dest" "$url" \
+        || die "cannot fetch $what from
+    $url
+    Check the network connection, or pass --version for one that exists."
+    # An empty file here would sail through every later check and produce a
+    # confusing 'no envideo entry' instead of naming the real problem.
+    [ -s "$dest" ] || die "$what came back empty from $url"
+    printf '%s\n' "$dest"
+}
+
 if [ -n "$LOCK_FILE" ]; then
-    [ -f "$LOCK_FILE" ] || die "SWITCHVN_LOCK points at $LOCK_FILE, which does not exist"
-    ok "using $LOCK_FILE"
+    case "$LOCK_FILE" in
+        http://*|https://*)
+            src="$LOCK_FILE"
+            LOCK_FILE=$(fetch_lock "$src" "the lock at $src")
+            ok "using $src" ;;
+        *)
+            [ -f "$LOCK_FILE" ] || die "SWITCHVN_LOCK points at $LOCK_FILE, which does not exist"
+            ok "using $LOCK_FILE" ;;
+    esac
+    [ -z "$WANT_VERSION" ] || warn "SWITCHVN_LOCK overrides --version"
+elif [ -n "$WANT_VERSION" ]; then
+    url="$RELEASES/download/v$WANT_VERSION/switchvn.lock"
+    LOCK_FILE=$(fetch_lock "$url" "SwitchVN $WANT_VERSION")
+    ok "pinned to SwitchVN $WANT_VERSION"
 else
-    LOCK_FILE="$TMPDIR_SWITCHVN/switchvn.lock"
-    wget -qO "$LOCK_FILE" "$LOCK_URL" \
-        || die "cannot fetch the component lock - check the network connection"
+    LOCK_FILE=$(fetch_lock "$LOCK_LATEST_URL" "the latest SwitchVN release")
 fi
 
 SWITCHVN_VERSION=$(awk '$1 == "SWITCHVN_VERSION" { print $2; exit }' "$LOCK_FILE")
 [ -n "$SWITCHVN_VERSION" ] || die "the lock file has no SWITCHVN_VERSION"
 ok "SwitchVN $SWITCHVN_VERSION"
+
+# Compare against what is already installed, so a reinstall says what it is
+# about to change instead of silently swapping components underneath.
+PREV_LOCK="$STATE_DIR/switchvn.lock"
+if [ -r "$PREV_LOCK" ]; then
+    prev_version=$(awk '$1 == "SWITCHVN_VERSION" { print $2; exit }' "$PREV_LOCK")
+    if [ "$prev_version" = "$SWITCHVN_VERSION" ]; then
+        info "SwitchVN $SWITCHVN_VERSION is already installed; reinstalling it"
+    else
+        info "upgrading from SwitchVN ${prev_version:-unknown}"
+    fi
+
+    changed=""
+    for c in envideo ffmpeg dxvk box64 proton; do
+        old=$(awk -v n="$c" '$1 == n && NF >= 4 { print $3; exit }' "$PREV_LOCK")
+        new=$(awk -v n="$c" '$1 == n && NF >= 4 { print $3; exit }' "$LOCK_FILE")
+        [ -n "$old" ] && [ "$old" != "$new" ] || continue
+        info "  $c: $old -> $new"
+        changed="$changed $c"
+    done
+    [ -n "$changed" ] || info "  no component changes"
+
+    # libavcodec links libenvideo.so, whose SONAME carries no version, so the
+    # loader accepts any copy and a mismatched pair misdecodes rather than
+    # failing to link. The two only ever move together.
+    case "$changed" in
+        *envideo*ffmpeg*|*ffmpeg*envideo*) ;;
+        *envideo*|*ffmpeg*)
+            die "this lock moves only one of envideo and FFmpeg.
+    They are built against each other and have to move together; installing
+    them apart produces bad decoding with no error message." ;;
+    esac
+fi
 
 if [ "$SKIP_SYSTEM" -eq 0 ]; then
     URL_ENVIDEO=$(asset_url envideo)

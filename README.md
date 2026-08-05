@@ -20,7 +20,8 @@ winedmo asking for it — then fixes the pile of bugs found along the way.
 first, then run one command.**
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh)
+curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \
+  && bash /tmp/install-switchvn.sh
 ```
 
 ---
@@ -58,7 +59,8 @@ The installer checks all of these and tells you exactly what is missing.
 ## Installing
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh)
+curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \
+  && bash /tmp/install-switchvn.sh
 ```
 
 It does four things:
@@ -75,12 +77,33 @@ It does four things:
 Options: `-y` to skip prompts, `--skip-system` / `--skip-proton` /
 `--skip-dxvk` to leave a part alone.
 
-Versions come from [switchvn.lock](switchvn.lock), not from whatever each
-repository published most recently. The components are not independent —
+### Versions
+
+A SwitchVN version names **one combination of components that was checked
+together on hardware** — not a feature set. The components are not independent:
 libavcodec links `libenvideo.so`, which carries no version in its SONAME, so
-a mismatched pair produces bad decoding rather than a link error. The lock
-names one combination that was checked on hardware. To install a different
-one, point `SWITCHVN_LOCK` at your own copy.
+the loader accepts any copy and a mismatched pair produces bad decoding rather
+than a link error.
+
+That combination lives in [switchvn.lock](switchvn.lock), published as an asset
+on each release. The installer downloads the lock for the release you asked
+for, then fetches exactly those component tags.
+
+```bash
+bash /tmp/install-switchvn.sh                  # latest release
+bash /tmp/install-switchvn.sh --version 1.0    # a specific one
+```
+
+Reinstalling prints which components are about to change, and refuses a lock
+that moves only one of envideo and FFmpeg.
+
+To try a combination that has not been released yet, point `SWITCHVN_LOCK` at
+a lock file or URL — this is how a candidate is tested before it is tagged:
+
+```bash
+SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.lock \
+  bash /tmp/install-switchvn.sh
+```
 
 Afterwards:
 
@@ -140,7 +163,8 @@ worked.
 ## Uninstalling
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninstall-switchvn.sh)
+curl -fsSL -o /tmp/uninstall-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/uninstall-switchvn.sh \
+  && bash /tmp/uninstall-switchvn.sh
 ```
 
 It removes exactly the files recorded at install time, so nothing else in
@@ -154,7 +178,9 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Building it yourself
 
-See [docs/BUILDING.md](docs/BUILDING.md). The component repositories:
+See [docs/BUILDING.md](docs/BUILDING.md), and
+[docs/RELEASING.md](docs/RELEASING.md) for how a version gets cut.
+The component repositories:
 
 | Repository | Contents |
 | --- | --- |
