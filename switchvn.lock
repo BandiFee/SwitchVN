@@ -16,7 +16,7 @@ SWITCHVN_VERSION 1.0
 envideo BandiFee/SwitchVN-Envideo     switchvn-envideo-1.0.0-1 switchvn-envideo-aarch64.tar.gz
 ffmpeg  BandiFee/SwitchVN-FFmpeg      switchvn-ffmpeg-8.1.1-1  switchvn-ffmpeg-aarch64.tar.gz
 dxvk    BandiFee/SwitchVN-DXVK-Sarek  switchvn-dxvk-1.12.0-1   switchvn-dxvk.tar.gz
-box64   BandiFee/SwitchVN-Box64       switchvn-box64-0.4.5-2   switchvn-box64.deb
+box64   BandiFee/SwitchVN-Box64       switchvn-box64-0.4.5-1   switchvn-box64.deb
 
 # Proton keeps upstream's naming: Switchdeck's launch-steam.sh decides whether
 # to apply its vertex-explosion patch by matching the directory name against
