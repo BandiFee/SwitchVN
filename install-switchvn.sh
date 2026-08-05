@@ -344,7 +344,9 @@ component_reported() {
     case "$1" in
         envideo) PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion envideo 2>/dev/null ;;
         ffmpeg)  "$FFMPEG_BIN" -version 2>/dev/null | head -1 | sed -n 's/^ffmpeg version \([^ ]*\).*/\1/p' ;;
-        box64)   box64 -v 2>/dev/null | head -1 | sed -n 's/.* \(v[0-9][^ ]*\).*/\1/p' ;;
+        # box64 prints its banner on stderr: core.c sets ftrace = stderr before
+        # handling -v. Discarding stderr here left this the one blank cell.
+        box64)   box64 -v 2>&1 | head -1 | sed -n 's/.* \(v[0-9][^ ]*\).*/\1/p' ;;
         proton)  [ -d "$COMPATTOOLS/$PROTON_NAME/files" ] && printf '%s' "$PROTON_NAME" ;;
         dxvk)    strings "$COMPATTOOLS/$PROTON_NAME/files/lib/switchvn-dxvk/x64/d3d9.dll" 2>/dev/null \
                      | grep -m1 -oE 'v[0-9]+\.[0-9]+\.[0-9]+-SwitchVN[-0-9]*' ;;

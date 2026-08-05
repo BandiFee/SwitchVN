@@ -55,11 +55,12 @@ SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.
   bash /tmp/install-switchvn.sh
 ```
 
-先核对自报版本和 lock 对得上:
+先核对自报版本和 lock 对得上。FFmpeg 报的是 commit 而不是 8.1.1 —— 它的版本串来自
+`git describe`,而 fork 里没有上游的版本 tag。这比版本号定位得更准:
 
 ```bash
 pkg-config --modversion envideo           # 1.0.0-SwitchVN-N
-/usr/local/bin/ffmpeg -version | head -1  # ... 8.1.1-SwitchVN-N
+/usr/local/bin/ffmpeg -version | head -1  # ... <commit>-SwitchVN-N
 box64 -v | head -1                        # Box64 arm64 v0.4.5-SwitchVN-N ...
 ls -d ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-3-SwitchVN-N
 ```

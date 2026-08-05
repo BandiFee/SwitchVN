@@ -62,11 +62,14 @@ SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.
   bash /tmp/install-switchvn.sh
 ```
 
-Check the reported versions match the lock:
+Check the reported versions match the lock. FFmpeg reports a commit rather
+than 8.1.1 — its version comes from `git describe`, and the fork carries no
+upstream release tags — which pins the build more precisely than a release
+number would:
 
 ```bash
 pkg-config --modversion envideo           # 1.0.0-SwitchVN-N
-/usr/local/bin/ffmpeg -version | head -1  # ... 8.1.1-SwitchVN-N
+/usr/local/bin/ffmpeg -version | head -1  # ... <commit>-SwitchVN-N
 box64 -v | head -1                        # Box64 arm64 v0.4.5-SwitchVN-N ...
 ls -d ~/.local/share/Steam/compatibilitytools.d/GE-Proton11-3-SwitchVN-N
 ```
