@@ -16,7 +16,7 @@ SwitchVN connects that path end to end — a Box64 wrapper that routes the x86
 FFmpeg calls onto the native ARM libraries, an envideo hwaccel in FFmpeg, and
 winedmo asking for it — then fixes the pile of bugs found along the way.
 
-**For ordinary users: install [Switchdeck](https://github.com/SildurFX/Switchdeck)
+**For ordinary users: install [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck)
 first, then run one command.**
 
 ```bash
@@ -46,7 +46,7 @@ Measured on 20 seconds of 1080p VC-1: 13.42s of CPU time down to 3.34s.
 ## Requirements
 
 - A Nintendo Switch running switchroot Ubuntu (aarch64, Ubuntu 24.04 based)
-- [Switchdeck](https://github.com/SildurFX/Switchdeck) installed, with Steam
+- [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) installed, with Steam
   started through it at least once
 - Your user in the `video` group (`id -nG | grep video`; if not,
   `sudo usermod -aG video $USER` and log out and back in)
@@ -63,16 +63,22 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
   && bash /tmp/install-switchvn.sh
 ```
 
-It does four things:
+It does five things:
 
 1. Installs native aarch64 **envideo** and **FFmpeg** into `/usr/local` (needs
-   sudo). Box64's ffmpeg8 wrapper then redirects the x86 Proton's
-   `libavcodec.so.62` and `libavutil.so.60` onto these native libraries.
-2. Unpacks **GE-Proton11-3-SwitchVN-1** into
+   sudo).
+2. Installs the **Box64** build carrying the ffmpeg8 wrapper, which redirects
+   the x86 Proton's `libavcodec.so.62` and `libavutil.so.60` onto those native
+   libraries. The version matters — see below.
+3. Unpacks **GE-Proton11-3-SwitchVN-1** into
    `~/.local/share/Steam/compatibilitytools.d/`.
-3. Puts the fixed **DXVK** inside the Proton directory and symlinks to it.
-4. Checks itself: exactly one `libenvideo.so`, and both FFmpeg sonames in the
+4. Puts the fixed **DXVK** inside the Proton directory and symlinks to it.
+5. Checks itself: exactly one `libenvideo.so`, and both FFmpeg sonames in the
    linker cache.
+
+Step 2 replaces the Pi-Apps `box64-tegrax1` package if it is present — the
+package declares `Conflicts`/`Replaces` on it, so dpkg swaps it rather than
+refusing to overwrite `/usr/bin/box64`.
 
 Options: `-y` to skip prompts, `--skip-system` / `--skip-proton` /
 `--skip-dxvk` to leave a part alone.
@@ -114,11 +120,14 @@ Afterwards:
 
 ### Why DXVK goes inside the Proton directory
 
-Switchdeck's `update-switchdeck.sh` does `rm -rf $SWITCHDECK_DIR/DXVK` and
-redownloads whenever upstream DXVK-Sarek publishes a release, which would wipe
-out SwitchVN's fix.
+`launch-steam.sh` relinks every Proton's `wine/dxvk` from
+`$STEAMROOT/Switchdeck/DXVK` on each Steam launch, so a copy dropped only into
+the Proton directory would be replaced on the next start. SwitchVN populates
+`Switchdeck/DXVK` too, which is why SwitchVN-Switchdeck drops the DXVK download
+that upstream Switchdeck does — it would otherwise overwrite that folder with a
+stock DXVK-Sarek whenever upstream published one.
 
-But `launch-steam.sh` guards its DXVK replacement with an idempotence check: if
+The relink is guarded by an idempotence check: if
 `d3d11.dll` *and* `d3d12.dll` are both already symlinks, it skips the whole
 block. So the installer keeps the DLLs in
 `$PROTON/files/lib/switchvn-dxvk/` and turns Proton's `dxvk/` and

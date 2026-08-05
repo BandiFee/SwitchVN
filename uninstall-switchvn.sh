@@ -107,11 +107,20 @@ rm -rf "${STATE_DIR:?}"
 step "Done"
 cat <<'EOF'
 
-SwitchVN is removed. The Proton build and system libraries are gone. The DXVK
-copy in Switchdeck/DXVK was left in place: launch-steam.sh uses it to patch the
-remaining Proton builds on every Steam launch, so removing it would leave them
-without any DXVK source. Delete that folder manually if you want Switchdeck's
-relink to have no DXVK at all.
+SwitchVN is removed. The Proton build and system libraries are gone.
+
+Two things were deliberately left alone, because removing them would break more
+than it cleans up:
+
+  Box64          Steam itself runs x86 code through it, so removing it stops
+                 Steam from starting at all. It stays installed; it simply has
+                 no native FFmpeg left to redirect to.
+
+  Switchdeck/DXVK  launch-steam.sh relinks the remaining Proton builds from
+                 this folder on every Steam launch, so deleting it would leave
+                 them with no DXVK source.
+
+Remove either by hand if you really want to.
 
 If a game was set to use the SwitchVN Proton build, change it back in the
 game's Properties -> Compatibility.

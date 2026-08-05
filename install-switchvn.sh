@@ -159,11 +159,16 @@ ok "aarch64, required tools present"
     Steam once, then run this again."
 ok "Switchdeck found"
 
-# Box64 runs the x86 Proton and is what loads the native FFmpeg libraries.
-command -v box64 >/dev/null || [ -x /usr/local/bin/box64 ] \
-    || die "box64 was not found. Switchdeck installs it; if you removed it, the
-    x86 Proton build cannot run at all."
-ok "box64 found"
+# Box64 runs the x86 Proton, and its ffmpeg8 wrapper is what puts the native
+# FFmpeg in front of the emulated one. The version matters: the wrapper checks
+# a minimum for each of the five FFmpeg libraries and drops the whole native set
+# if one falls short, saying so only at LOG_DEBUG. So SwitchVN installs the
+# build pinned in the lock rather than accepting whatever is already there.
+if command -v box64 >/dev/null 2>&1; then
+    ok "box64 present: $(box64 -v 2>/dev/null | head -1 || echo unknown)"
+else
+    info "box64 is not installed yet; the lock's build will be installed"
+fi
 
 # The decoder talks to the Tegra multimedia engines through these nodes.
 missing_nodes=""
@@ -264,8 +269,10 @@ fi
 if [ "$SKIP_SYSTEM" -eq 0 ]; then
     URL_ENVIDEO=$(asset_url envideo)
     URL_FFMPEG=$(asset_url ffmpeg)
+    URL_BOX64=$(asset_url box64)
     ok "envideo: $(lock_field envideo tag)"
     ok "ffmpeg:  $(lock_field ffmpeg tag)"
+    ok "box64:   $(lock_field box64 tag)"
 fi
 if [ "$SKIP_PROTON" -eq 0 ]; then
     URL_PROTON=$(asset_url proton)
@@ -289,6 +296,7 @@ step "Downloading"
 if [ "$SKIP_SYSTEM" -eq 0 ]; then
     fetch "$URL_ENVIDEO" "$TMPDIR_SWITCHVN/envideo.tar.gz"
     fetch "$URL_FFMPEG"  "$TMPDIR_SWITCHVN/ffmpeg.tar.gz"
+    fetch "$URL_BOX64"   "$TMPDIR_SWITCHVN/box64.deb"
 fi
 if [ "$SKIP_PROTON" -eq 0 ]; then
     fetch "$URL_PROTON" "$TMPDIR_SWITCHVN/proton.tar.gz"
@@ -325,6 +333,18 @@ if [ "$SKIP_SYSTEM" -eq 0 ]; then
     printf '/usr/local/lib\n%s\n' "$FFMPEG_LIBDIR" | sudo tee "$LDSOCONF" >/dev/null
     sudo ldconfig
     ok "ldconfig updated"
+
+    step "Installing Box64"
+
+    # The package declares Conflicts/Replaces on box64-tegrax1, so dpkg swaps
+    # out the Pi-Apps build Switchdeck installs rather than refusing to
+    # overwrite /usr/bin/box64. Installing after ldconfig means the postinst
+    # binfmt reload sees the native FFmpeg already in place.
+    sudo dpkg -i "$TMPDIR_SWITCHVN/box64.deb" \
+        || die "installing Box64 failed. If dpkg reported a file conflict, the
+    package it names has to be removed first:  sudo apt-get remove <name>"
+    printf 'box64\n' > "$STATE_DIR/box64.package"
+    ok "$(box64 -v 2>/dev/null | head -1 || echo 'box64 installed')"
 
     step "Verifying the native libraries"
 

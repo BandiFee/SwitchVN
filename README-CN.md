@@ -12,7 +12,7 @@ ARM FFmpeg,就算装了能硬解的 FFmpeg 也会被逐条指令模拟。结果�
 SwitchVN 把整条链路接通 —— 一个 Box64 包装层把 x86 的 FFmpeg 调用转到原生 ARM 库上、
 FFmpeg 里的 envideo hwaccel、以及 winedmo 主动去要它 —— 并顺带修掉了路上撞到的一串 bug。
 
-**面向普通用户:装完 [Switchdeck](https://github.com/SildurFX/Switchdeck) 之后,再跑一条命令就行。**
+**面向普通用户:装完 [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) 之后,再跑一条命令就行。**
 
 ```bash
 curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \
@@ -41,7 +41,7 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 ## 前置条件
 
 - Nintendo Switch,运行 switchroot Ubuntu(aarch64,Ubuntu 24.04 系)
-- 已安装 [Switchdeck](https://github.com/SildurFX/Switchdeck),且用它启动过一次 Steam
+- 已安装 [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck),且用它启动过一次 Steam
 - 当前用户在 `video` 组里(`id -nG | grep video`,不在就
   `sudo usermod -aG video $USER` 然后重新登录)
 - 存在 `/dev/nvhost-nvdec` 和 `/dev/nvmap`
@@ -57,14 +57,17 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
   && bash /tmp/install-switchvn.sh
 ```
 
-它做四件事:
+它做五件事:
 
 1. 把原生 aarch64 的 **envideo** 和 **FFmpeg** 装进 `/usr/local`(需要 sudo)。
-   Box64 的 ffmpeg8 包装层会自动把 x86 Proton 里的 `libavcodec.so.62` /
-   `libavutil.so.60` 重定向到这两个原生库上。
-2. 把 **GE-Proton11-3-SwitchVN-1** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
-3. 把修好的 **DXVK** 放进 Proton 目录内部,再做符号链接。
-4. 自检:`libenvideo.so` 只能有一份,两个 FFmpeg soname 必须在 ld 缓存里。
+2. 装带 ffmpeg8 包装层的 **Box64**,它把 x86 Proton 里的 `libavcodec.so.62` /
+   `libavutil.so.60` 重定向到上面那两个原生库。版本很关键,见下文。
+3. 把 **GE-Proton11-3-SwitchVN-1** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
+4. 把修好的 **DXVK** 放进 Proton 目录内部,再做符号链接。
+5. 自检:`libenvideo.so` 只能有一份,两个 FFmpeg soname 必须在 ld 缓存里。
+
+第 2 步会顶掉已装的 pi-apps `box64-tegrax1` —— 包里声明了对它的
+`Conflicts`/`Replaces`,所以 dpkg 会直接替换,而不是拒绝覆盖 `/usr/bin/box64`。
 
 可用参数:`-y` 不询问,`--skip-system` / `--skip-proton` / `--skip-dxvk` 跳过某一部分。
 
@@ -99,10 +102,12 @@ SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.
 
 ### 为什么 DXVK 要塞进 Proton 目录里
 
-Switchdeck 的 `update-switchdeck.sh` 在上游 DXVK-Sarek 发新版时会
-`rm -rf $SWITCHDECK_DIR/DXVK` 重新下载,会把 SwitchVN 的修复冲掉。
+`launch-steam.sh` 每次启动 Steam 都会把所有 Proton 的 `wine/dxvk` 从
+`$STEAMROOT/Switchdeck/DXVK` 重新链一遍,所以只放进 Proton 目录的话下次启动就会被顶掉。
+SwitchVN 因此也会填充 `Switchdeck/DXVK` —— 这也正是 SwitchVN-Switchdeck 要去掉上游那段
+DXVK 下载的原因:留着的话,上游 DXVK-Sarek 一发新版就会把那个目录覆盖成原版。
 
-而 `launch-steam.sh` 的 DXVK 替换块有个幂等判断:`d3d11.dll` 和 `d3d12.dll`
+而这段重链有个幂等判断:`d3d11.dll` 和 `d3d12.dll`
 **同时**已经是符号链接就整块跳过。所以安装器把 DLL 放在
 `$PROTON/files/lib/switchvn-dxvk/`,把 Proton 的 `dxvk/` 和 `vkd3d-proton/`
 目录做成指向那里的符号链接 —— Switchdeck 于是不再碰这个 Proton 的 DXVK。
