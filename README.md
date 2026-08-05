@@ -16,8 +16,9 @@ SwitchVN connects that path end to end — a Box64 wrapper that routes the x86
 FFmpeg calls onto the native ARM libraries, an envideo hwaccel in FFmpeg, and
 winedmo asking for it — then fixes the pile of bugs found along the way.
 
-**For ordinary users: install [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck)
-first, then run one command.**
+**For ordinary users: one command.** It installs
+[SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) too if
+you do not have it, and leaves it alone if you do.
 
 ```bash
 curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \
@@ -46,8 +47,9 @@ Measured on 20 seconds of 1080p VC-1: 13.42s of CPU time down to 3.34s.
 ## Requirements
 
 - A Nintendo Switch running switchroot Ubuntu (aarch64, Ubuntu 24.04 based)
-- [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) installed, with Steam
-  started through it at least once
+- Nothing else — the installer offers to set up
+  [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) (Steam,
+  Box64, the launcher) when it is missing
 - Your user in the `video` group (`id -nG | grep video`; if not,
   `sudo usermod -aG video $USER` and log out and back in)
 - `/dev/nvhost-nvdec` and `/dev/nvmap` present
@@ -81,7 +83,12 @@ package declares `Conflicts`/`Replaces` on it, so dpkg swaps it rather than
 refusing to overwrite `/usr/bin/box64`.
 
 Options: `-y` to skip prompts, `--skip-system` / `--skip-proton` /
-`--skip-dxvk` to leave a part alone.
+`--skip-dxvk` to leave a part alone. `--skip-switchdeck` never touches
+Switchdeck; `--reinstall-switchdeck` replaces it.
+
+When Switchdeck is already installed the installer keeps it and only offers to
+reinstall, because reinstalling clears most of Steam's configuration. `-y` does
+not answer that one — it means "stop asking", not "yes, wipe it".
 
 ### Versions
 
