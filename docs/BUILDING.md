@@ -97,14 +97,51 @@ calls run natively instead of being emulated instruction by instruction.
 git clone https://github.com/BandiFee/SwitchVN-Box64.git
 cd SwitchVN-Box64
 cmake -S . -B build -G Ninja \
-    -DTEGRAX1=1 -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DTEGRAX1=1 -DARM_DYNAREC=ON \
+    -DBOX32=1 -DBOX32_BINFMT=1 \
+    -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 cd build && cpack        # produces the .deb
 ```
 
-`BOX32` stays off, matching the emulator already running on the Switch — there
-is no `/usr/lib/box64-i386-linux-gnu` and no box32 binfmt entry, and upstream
-marks it experimental.
+**Every one of those options is required, and each fails silently without it.**
+
+`CMAKE_INSTALL_PREFIX=/usr` — `system/box64.conf.cmake` bakes
+`${CMAKE_INSTALL_PREFIX}/bin/box64` into the binfmt registration when CMake
+configures, while CPack packages under `/usr` regardless of the prefix. Left at
+CMake's default the package registers `/usr/local/bin/box64` and installs
+`/usr/bin/box64`, so the kernel has no interpreter for x86 binaries at all:
+Steam exits the instant Play is clicked, and because box64 is never reached
+even `BOX64_LOG=1` prints nothing.
+
+`BOX32=1` — Proton and most visual novels have 32-bit x86 components. Without
+it they cannot start. It leaves no trace on an installed system, so a machine
+running a BOX32 build looks identical to one without: no box32 binfmt entry, no
+`/usr/lib/box64-i386-linux-gnu`. Do not read the absence of those as evidence
+that it is off — that mistake is what shipped a broken package here.
+
+`TEGRAX1=1` — selects `-mcpu=cortex-a57+crypto`, the Switch's cores.
+
+Check the build rather than trusting the options took effect; CI asserts all
+three for the same reason:
+
+```bash
+grep -oE '\-mcpu=[^ ]+' build/build.ninja | sort -u   # must include cortex-a57
+grep -c wrapped32 build/build.ninja                   # must be > 0
+```
+
+More than one `-mcpu` is normal: upstream pins `-mcpu=cortex-a76` for the
+dynarec assembly on every target, by its own comment "a random cpu that have
+8.2 architecture so assembly can be build".
+
+After packaging, confirm the binfmt registration names the binary that is
+actually shipped — the two come from different places and can disagree:
+
+```bash
+dpkg-deb -x *.deb pkg
+grep -hv '^#' pkg/etc/binfmt.d/*.conf | awk -F: '{print $(NF-1)}'   # /usr/bin/box64
+```
 
 The wrapper is all-or-nothing. `wrappedffmpeg8.c` walks a table of the five
 libraries with a minimum version for each, and one library missing, too old, or

@@ -92,13 +92,45 @@ sudo ldconfig
 git clone https://github.com/BandiFee/SwitchVN-Box64.git
 cd SwitchVN-Box64
 cmake -S . -B build -G Ninja \
-    -DTEGRAX1=1 -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DTEGRAX1=1 -DARM_DYNAREC=ON \
+    -DBOX32=1 -DBOX32_BINFMT=1 \
+    -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 cd build && cpack        # 产出 .deb
 ```
 
-`BOX32` 保持关闭,和 Switch 上现在跑的那个一致 —— 机器上没有
-`/usr/lib/box64-i386-linux-gnu`,也没有 box32 的 binfmt 项,上游也标着 experimental。
+**上面每个选项都是必需的,而且少了哪个都是静默失败。**
+
+`CMAKE_INSTALL_PREFIX=/usr` —— `system/box64.conf.cmake` 在 CMake 配置阶段就把
+`${CMAKE_INSTALL_PREFIX}/bin/box64` 写死进 binfmt 注册文件,而 CPack 打包时一律用
+`/usr`。保持 CMake 默认值的话,注册的是 `/usr/local/bin/box64`、装的是
+`/usr/bin/box64`,内核对 x86 二进制**根本没有可用的解释器**:Steam 点 Play 立刻退,
+而且因为 box64 从没被调用,连 `BOX64_LOG=1` 都一行不打。
+
+`BOX32=1` —— Proton 和大多数视觉小说都有 32 位 x86 组件,不开就起不来。它在装好的
+系统上**不留任何痕迹**:开了和没开一样,都没有 box32 的 binfmt 项、也没有
+`/usr/lib/box64-i386-linux-gnu`。**不要拿"看不到这些"当作它没开的证据** —— 这个仓库
+正是因为这个误判发过一个坏包。
+
+`TEGRAX1=1` —— 选中 `-mcpu=cortex-a57+crypto`,即 Switch 的核心。
+
+不要假设选项生效了,查构建产物;CI 也是出于同样原因断言这三条:
+
+```bash
+grep -oE '\-mcpu=[^ ]+' build/build.ninja | sort -u   # 应含 cortex-a57
+grep -c wrapped32 build/build.ninja                   # 应 > 0
+```
+
+出现多个 `-mcpu` 是正常的:上游对 dynarec 汇编在所有平台固定用 `-mcpu=cortex-a76`,
+其注释写的是"随便找个支持 8.2 架构的 CPU 让汇编能编过"。
+
+打完包再核对 binfmt 注册的路径和实际装的位置一致 —— 这两者来自不同环节,会对不上:
+
+```bash
+dpkg-deb -x *.deb pkg
+grep -hv '^#' pkg/etc/binfmt.d/*.conf | awk -F: '{print $(NF-1)}'   # /usr/bin/box64
+```
 
 **这个包装层是全有或全无。** `wrappedffmpeg8.c` 里有一张五个库的表,每个带一个最低
 版本;任意一个缺失、过旧、或少一个必需符号,整套原生映射都会被丢掉 ——
