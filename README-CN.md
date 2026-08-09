@@ -89,7 +89,7 @@ SwitchVN 的版本号代表**一组在真机上一起验过的组件组合**,不
 
 ```bash
 bash /tmp/install-switchvn.sh                  # 最新版
-bash /tmp/install-switchvn.sh --version 1.0    # 指定版本
+bash /tmp/install-switchvn.sh --version 0.1.0  # 指定版本
 ```
 
 重装时会打印哪些组件要变;如果某份 lock 只动了 envideo 和 FFmpeg 中的一个,直接拒绝。

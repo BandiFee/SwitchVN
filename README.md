@@ -104,7 +104,7 @@ for, then fetches exactly those component tags.
 
 ```bash
 bash /tmp/install-switchvn.sh                  # latest release
-bash /tmp/install-switchvn.sh --version 1.0    # a specific one
+bash /tmp/install-switchvn.sh --version 0.1.0  # a specific one
 ```
 
 Reinstalling prints which components are about to change, and refuses a lock

@@ -11,7 +11,7 @@
 #
 # Format: <name> <owner/repo> <tag> <asset>
 
-SWITCHVN_VERSION 1.0
+SWITCHVN_VERSION 0.1.0
 
 envideo BandiFee/SwitchVN-Envideo     switchvn-envideo-1.0.0-1 switchvn-envideo-aarch64.tar.gz
 ffmpeg  BandiFee/SwitchVN-FFmpeg      switchvn-ffmpeg-8.1.1-1  switchvn-ffmpeg-aarch64.tar.gz
