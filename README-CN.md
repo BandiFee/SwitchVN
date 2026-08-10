@@ -30,7 +30,6 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 | x86 Proton 的 FFmpeg 调用落到原生 ARM 库上,不再被模拟 | Box64 ffmpeg8 包装层 |
 | 视频走 NVDEC 硬解,CPU 占用大幅下降 | winedmo + envideo |
 | 视频不再黑屏 | envideo host1x gather/reloc 偏移修复 |
-| WMV3 / VC-1 不再黑屏 | FFmpeg envideo VC-1 空指针修复 |
 | 跳过 OP/ED 不再卡死 | qasf dmowrapper 加锁顺序 |
 | 跳过时不再报 `Error Abort 0x80040211` | winedmo wm_reader 分配器处理 |
 | 播放时不再有撕裂 | DXVK D3D9 呈现模式 |
@@ -175,7 +174,7 @@ curl -fsSL -o /tmp/uninstall-switchvn.sh https://raw.githubusercontent.com/Bandi
 | --- | --- |
 | [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo 硬解、qasf 死锁修复、wm_reader 修复、aarch64 MF 回退 |
 | [SwitchVN-Box64](https://github.com/BandiFee/SwitchVN-Box64) | ffmpeg8 原生包装层 —— libavcodec 62、libavformat 62、libavutil 60、libswscale 9、libswresample 6 重定向到 ARM 构建 |
-| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | 带 `--enable-envideo` 的 FFmpeg,VC-1 空指针修复 |
+| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | FFmpeg 上游 envideo 分支的 aarch64 构建 |
 | [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc 偏移修复 |
 | [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 呈现模式 vsync 修复 |
 | [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) | 去掉 DXVK 下载的 Switchdeck,把 `Switchdeck/DXVK` 让给 SwitchVN |

@@ -34,7 +34,6 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 | The x86 Proton's FFmpeg calls land on the native ARM libraries instead of being emulated | Box64 ffmpeg8 wrapper |
 | Video decodes on NVDEC; CPU load drops sharply | winedmo + envideo |
 | Video is no longer black | envideo host1x gather/reloc offsets |
-| WMV3 / VC-1 no longer black | FFmpeg envideo VC-1 null-pointer fix |
 | Skipping an opening no longer hangs the game | qasf dmowrapper lock ordering |
 | Skipping no longer raises `Error Abort 0x80040211` | winedmo wm_reader allocator handling |
 | No more tearing during playback | DXVK D3D9 present mode |
@@ -202,7 +201,7 @@ The component repositories:
 | --- | --- |
 | [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo decoding, qasf deadlock fix, wm_reader fix, aarch64 MF fallback |
 | [SwitchVN-Box64](https://github.com/BandiFee/SwitchVN-Box64) | the ffmpeg8 native wrapper — libavcodec 62, libavformat 62, libavutil 60, libswscale 9 and libswresample 6 redirected to the ARM builds |
-| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | FFmpeg with `--enable-envideo`, VC-1 null-pointer fix |
+| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | aarch64 build of FFmpeg's upstream envideo branch |
 | [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc offset fix |
 | [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 present mode vsync fix |
 | [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) | Switchdeck with the DXVK download dropped, so SwitchVN owns `Switchdeck/DXVK` |
