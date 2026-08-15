@@ -76,12 +76,12 @@ def main(argv):
     out.append("```bash")
     out.append(
         "curl -fsSL -o /tmp/install-switchvn.sh "
-        "https://raw.githubusercontent.com/BandiFee/SwitchVN/main/install-switchvn.sh \\"
+        f"https://raw.githubusercontent.com/BandiFee/SwitchVN/{tag}/install-switchvn.sh \\"
     )
-    out.append("  && bash /tmp/install-switchvn.sh")
+    out.append(f"  && bash /tmp/install-switchvn.sh --version {version}")
     out.append("```")
     out.append("")
-    out.append(f"To install this version specifically once a newer one exists, add `--version {version}`.")
+    out.append(f"This command is pinned to the `{tag}` release and its component lock.")
 
     print("\n".join(out))
     return 0
