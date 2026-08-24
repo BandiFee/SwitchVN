@@ -71,7 +71,7 @@ It does five things:
 2. Installs the **Box64** build carrying the ffmpeg8 wrapper, which redirects
    the x86 Proton's `libavcodec.so.62` and `libavutil.so.60` onto those native
    libraries. The version matters — see below.
-3. Unpacks **GE-Proton11-3-SwitchVN-1** into
+3. Unpacks **GE-Proton11-3-SwitchVN-2** into
    `~/.local/share/Steam/compatibilitytools.d/`.
 4. Puts the fixed **DXVK** inside the Proton directory and symlinks to it.
 5. Checks itself: exactly one `libenvideo.so`, and both FFmpeg sonames in the
@@ -103,7 +103,7 @@ for, then fetches exactly those component tags.
 
 ```bash
 bash /tmp/install-switchvn.sh                  # latest release
-bash /tmp/install-switchvn.sh --version 0.1.0  # a specific one
+bash /tmp/install-switchvn.sh --version 0.1.1  # a specific one
 ```
 
 Reinstalling prints which components are about to change, and refuses a lock
@@ -122,7 +122,7 @@ Afterwards:
 1. Restart Steam through Switchdeck's launcher:
    `~/.local/share/Steam/launch-steam.sh`
 2. In the game's **Properties → Compatibility**, force a specific compatibility
-   tool and pick **GE-Proton11-3-SwitchVN-1**.
+   tool and pick **GE-Proton11-3-SwitchVN-2**.
 
 ### Why DXVK goes inside the Proton directory
 

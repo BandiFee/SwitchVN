@@ -11,7 +11,7 @@
 #
 # Format: <name> <owner/repo> <tag> <asset>
 
-SWITCHVN_VERSION 0.1.0
+SWITCHVN_VERSION 0.1.1
 
 envideo BandiFee/SwitchVN-Envideo     switchvn-envideo-1.0.0-1 switchvn-envideo-aarch64.tar.gz
 ffmpeg  BandiFee/SwitchVN-FFmpeg      switchvn-ffmpeg-8.1.1-1  switchvn-ffmpeg-aarch64.tar.gz
@@ -22,4 +22,4 @@ box64   BandiFee/SwitchVN-Box64       switchvn-box64-0.4.4-1   switchvn-box64.de
 # to apply its vertex-explosion patch by matching the directory name against
 # GE-Proton11*, and the build name comes from the tag. A revision suffix has to
 # keep that prefix intact.
-proton  BandiFee/SwitchVN-ProtonGE    GE-Proton11-3-SwitchVN-1 GE-Proton11-3-SwitchVN-1.tar.gz
+proton  BandiFee/SwitchVN-ProtonGE    GE-Proton11-3-SwitchVN-2 GE-Proton11-3-SwitchVN-2.tar.gz
