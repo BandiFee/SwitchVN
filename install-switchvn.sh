@@ -80,7 +80,7 @@ Usage: install-switchvn.sh [options]
   -y, --yes           Do not ask for confirmation. An existing Switchdeck is
                       kept; use --reinstall-switchdeck to replace it.
       --version VER   Install a specific SwitchVN version instead of the
-                      latest one, e.g. --version 0.1.1.
+                      latest one, e.g. --version 0.1.2.
       --skip-system   Do not touch /usr/local (no envideo/FFmpeg install).
       --skip-proton   Do not install Proton.
       --skip-dxvk     Do not install DXVK into Proton.
@@ -104,7 +104,7 @@ EOF
 while [ $# -gt 0 ]; do
     case "$1" in
         -y|--yes)      ASSUME_YES=1 ;;
-        --version)     [ $# -ge 2 ] || die "--version needs a version, e.g. --version 0.1.1"
+        --version)     [ $# -ge 2 ] || die "--version needs a version, e.g. --version 0.1.2"
                        WANT_VERSION="$2"; shift ;;
         --version=*)   WANT_VERSION="${1#*=}" ;;
         --skip-system) SKIP_SYSTEM=1 ;;

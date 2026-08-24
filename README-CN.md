@@ -64,7 +64,7 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 1. 把原生 aarch64 的 **envideo** 和 **FFmpeg** 装进 `/usr/local`(需要 sudo)。
 2. 装带 ffmpeg8 包装层的 **Box64**,它把 x86 Proton 里的 `libavcodec.so.62` /
    `libavutil.so.60` 重定向到上面那两个原生库。版本很关键,见下文。
-3. 把 **GE-Proton11-3-SwitchVN-2** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
+3. 把 **GE-Proton11-3-SwitchVN-3** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
 4. 把修好的 **DXVK** 放进 Proton 目录内部,再做符号链接。
 5. 自检:`libenvideo.so` 只能有一份,两个 FFmpeg soname 必须在 ld 缓存里。
 
@@ -88,7 +88,7 @@ SwitchVN 的版本号代表**一组在真机上一起验过的组件组合**,不
 
 ```bash
 bash /tmp/install-switchvn.sh                  # 最新版
-bash /tmp/install-switchvn.sh --version 0.1.1  # 指定版本
+bash /tmp/install-switchvn.sh --version 0.1.2  # 指定版本
 ```
 
 重装时会打印哪些组件要变;如果某份 lock 只动了 envideo 和 FFmpeg 中的一个,直接拒绝。
@@ -104,7 +104,7 @@ SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.
 装完之后:
 
 1. 用 Switchdeck 的启动器重启 Steam:`~/.local/share/Steam/launch-steam.sh`
-2. 在游戏的 **属性 → 兼容性** 里勾选强制使用兼容工具,选 **GE-Proton11-3-SwitchVN-2**
+2. 在游戏的 **属性 → 兼容性** 里勾选强制使用兼容工具,选 **GE-Proton11-3-SwitchVN-3**
 
 ### 为什么 DXVK 要塞进 Proton 目录里
 
