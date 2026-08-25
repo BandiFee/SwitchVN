@@ -29,17 +29,65 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 
 ## What you get
 
-| Change | Fixed in |
+| Result | SwitchVN work |
 | --- | --- |
 | The x86 Proton's FFmpeg calls land on the native ARM libraries instead of being emulated | Box64 ffmpeg8 wrapper |
-| Video decodes on NVDEC; CPU load drops sharply | winedmo + envideo |
-| Video is no longer black | envideo host1x gather/reloc offsets |
-| Skipping an opening no longer hangs the game | qasf dmowrapper lock ordering |
-| Skipping no longer raises `Error Abort 0x80040211` | winedmo wm_reader allocator handling |
+| Compatible video decodes on NVDEC; unsupported streams fall back to software | winedmo + envideo integration |
+| Video no longer comes out black because of Tegra host offsets or VC-1/WMV3 scratch mapping | envideo + FFmpeg fixes |
+| Skipping or stopping an opening no longer hangs or raises `Error Abort 0x80040211` | DirectShow stream and allocator lifecycle fixes |
 | No more tearing during playback | DXVK D3D9 present mode |
 | Unity games show the video instead of playing audio over a frozen frame | Media Foundation system-memory path on aarch64 |
+| Legacy MPEG graphs negotiate video correctly and expose complete MP1/MP2 audio types | DirectShow/Quartz compatibility fixes |
+| Media Foundation applications can select the H.265/HEVC decoder backed by winedmo and envideo | HEVC MFT registration and media-type support |
+| WMP ActiveX playback embeds, sizes and cleans up its DirectShow video window | WMP/DirectShow integration in `GE-Proton11-5-SwitchVN-2` |
 
-Measured on 20 seconds of 1080p VC-1: 13.42s of CPU time down to 3.34s.
+### Hardware decoder capabilities
+
+The current FFmpeg build enables these envideo hardware decoders:
+
+| Codec | FFmpeg hwaccel |
+| --- | --- |
+| H.264/AVC | `h264_envideo` |
+| H.265/HEVC | `hevc_envideo` |
+| MJPEG | `mjpeg_envideo` |
+| MPEG-1 Video | `mpeg1_envideo` |
+| MPEG-2 Video | `mpeg2_envideo` |
+| MPEG-4 Part 2 | `mpeg4_envideo` |
+| VC-1 | `vc1_envideo` |
+| WMV3 | `wmv3_envideo` |
+| VP8 | `vp8_envideo` |
+| VP9 | `vp9_envideo` |
+
+This list means the decoders are enabled in the SwitchVN build. It is not a
+blanket promise for every container, codec profile, level or resolution.
+winedmo uses envideo when the device and stream are compatible and falls back
+to software decoding otherwise. Extensions such as `.wmv`, `.asf`, `.mpg` or
+`.mp4` below are examples of playback paths, not container-wide guarantees.
+
+### Playback paths
+
+| Path | Source support | Recorded hardware verification |
+| --- | --- | --- |
+| DirectShow/Quartz | ASF/WMV and legacy MPEG graphs; MPEG sequence-header recovery, Colour conversion and complete MP1/MP2 media types | VC-1/WMV3 playback and legacy MPEG + MP2 opening playback verified |
+| qasf/WM Reader | Safe stop/skip ordering and allocator shutdown | VC-1/WMV3 stop and skip regressions verified |
+| Media Foundation | aarch64 system-memory delivery for Unity; H.265/HEVC decoder registration through winedmo/envideo | Unity system-memory path verified; dedicated HEVC coverage still pending |
+| WMP ActiveX | DirectShow video-window ownership, embedding, sizing, visibility and cleanup in `GE-Proton11-5-SwitchVN-2` | Implemented; dedicated hardware regression still pending |
+
+### Performance
+
+| Codec | Sample | Software CPU time | NVDEC CPU time | Reduction | Status |
+| --- | --- | ---: | ---: | ---: | --- |
+| VC-1 | 1080p, 20 seconds | 13.42s | 3.34s | 75.1% | Measured |
+| H.264/AVC | Same-method sample | TBD | TBD | TBD | Not measured yet |
+| H.265/HEVC | Same-method sample | TBD | TBD | TBD | Not measured yet |
+| MPEG-1/2 Video | Same-method sample | TBD | TBD | TBD | Not measured yet |
+| MPEG-4 Part 2 | Same-method sample | TBD | TBD | TBD | Not measured yet |
+| WMV3 | Same-method sample | TBD | TBD | TBD | Not measured yet |
+| VP8/VP9 | Same-method sample | TBD | TBD | TBD | Not measured yet |
+| MJPEG | Same-method sample | TBD | TBD | TBD | Not measured yet |
+
+`TBD` means no comparable measurement has been recorded yet; it does not mean
+the decoder is unsupported or failed.
 
 ---
 
@@ -71,7 +119,7 @@ It does five things:
 2. Installs the **Box64** build carrying the ffmpeg8 wrapper, which redirects
    the x86 Proton's `libavcodec.so.62` and `libavutil.so.60` onto those native
    libraries. The version matters — see below.
-3. Unpacks **GE-Proton11-5-SwitchVN-1** into
+3. Unpacks **GE-Proton11-5-SwitchVN-2** into
    `~/.local/share/Steam/compatibilitytools.d/`.
 4. Puts the fixed **DXVK** inside the Proton directory and symlinks to it.
 5. Checks itself: exactly one `libenvideo.so`, and both FFmpeg sonames in the
@@ -122,7 +170,7 @@ Afterwards:
 1. Restart Steam through Switchdeck's launcher:
    `~/.local/share/Steam/launch-steam.sh`
 2. In the game's **Properties → Compatibility**, force a specific compatibility
-   tool and pick **GE-Proton11-5-SwitchVN-1**.
+   tool and pick **GE-Proton11-5-SwitchVN-2**.
 
 ### Why DXVK goes inside the Proton directory
 
@@ -199,19 +247,23 @@ The component repositories:
 
 | Repository | Contents |
 | --- | --- |
-| [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo decoding, qasf deadlock fix, wm_reader fix, aarch64 MF fallback |
+| [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo/envideo decoding; DirectShow lifecycle, MPEG/Colour and MP1/MP2 fixes; aarch64 MF and HEVC support; WMP ActiveX video embedding |
 | [SwitchVN-Box64](https://github.com/BandiFee/SwitchVN-Box64) | the ffmpeg8 native wrapper — libavcodec 62, libavformat 62, libavutil 60, libswscale 9 and libswresample 6 redirected to the ARM builds |
-| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | aarch64 build of FFmpeg's upstream envideo branch |
+| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | aarch64 build of FFmpeg's envideo branch, including the VC-1/WMV3 CPU-writable scratch-map fix |
 | [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc offset fix |
 | [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 present mode vsync fix |
 | [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) | Switchdeck with the DXVK download dropped, so SwitchVN owns `Switchdeck/DXVK` |
 
 ## Credits
 
-- [averne](https://github.com/averne) — envideo
+The SwitchVN-specific integration and compatibility fixes above are maintained
+in these forks by BandiFee / Jianhao Fei. They build on the upstream projects
+and work of:
+
+- [averne](https://github.com/averne) — envideo and FFmpeg's envideo hardware decoders
 - [SildurFX](https://github.com/SildurFX) — Switchdeck
 - [pythonlover02](https://github.com/pythonlover02) — DXVK-Sarek
-- [GloriousEggroll](https://github.com/GloriousEggroll) — Proton-GE
+- [GloriousEggroll](https://github.com/GloriousEggroll) — Proton-GE and the media-stack rework used as SwitchVN's base
 - [ptitSeb](https://github.com/ptitSeb) — Box64
 
 ## License

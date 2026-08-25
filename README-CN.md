@@ -25,17 +25,63 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 
 ## 装了会得到什么
 
-| 变化 | 修在哪 |
+| 效果 | SwitchVN 的工作 |
 | --- | --- |
 | x86 Proton 的 FFmpeg 调用落到原生 ARM 库上,不再被模拟 | Box64 ffmpeg8 包装层 |
-| 视频走 NVDEC 硬解,CPU 占用大幅下降 | winedmo + envideo |
-| 视频不再黑屏 | envideo host1x gather/reloc 偏移修复 |
-| 跳过 OP/ED 不再卡死 | qasf dmowrapper 加锁顺序 |
-| 跳过时不再报 `Error Abort 0x80040211` | winedmo wm_reader 分配器处理 |
+| 兼容的视频走 NVDEC 硬解,不支持的流自动回落软解 | winedmo + envideo 集成 |
+| 视频不再因 Tegra host 偏移或 VC-1/WMV3 scratch 映射问题而黑屏 | envideo + FFmpeg 修复 |
+| 跳过或停止 OP/ED 不再卡死或报 `Error Abort 0x80040211` | DirectShow 流与分配器生命周期修复 |
 | 播放时不再有撕裂 | DXVK D3D9 呈现模式 |
 | Unity 游戏视频有画面而不只有声音 | aarch64 上默认走 MF 系统内存路径 |
+| 旧式 MPEG graph 能正确协商视频,并提供完整的 MP1/MP2 音频类型 | DirectShow/Quartz 兼容性修复 |
+| Media Foundation 程序可以选择由 winedmo 和 envideo 支撑的 H.265/HEVC 解码器 | HEVC MFT 注册与媒体类型支持 |
+| WMP ActiveX 播放能嵌入、缩放并正确清理 DirectShow 视频窗口 | `GE-Proton11-5-SwitchVN-2` 的 WMP/DirectShow 集成 |
 
-实测 1080p VC-1、20 秒素材:CPU 时间 13.42s → 3.34s。
+### 硬件解码能力
+
+当前 FFmpeg 构建启用了以下 envideo 硬件解码器:
+
+| 编码 | FFmpeg hwaccel |
+| --- | --- |
+| H.264/AVC | `h264_envideo` |
+| H.265/HEVC | `hevc_envideo` |
+| MJPEG | `mjpeg_envideo` |
+| MPEG-1 Video | `mpeg1_envideo` |
+| MPEG-2 Video | `mpeg2_envideo` |
+| MPEG-4 Part 2 | `mpeg4_envideo` |
+| VC-1 | `vc1_envideo` |
+| WMV3 | `wmv3_envideo` |
+| VP8 | `vp8_envideo` |
+| VP9 | `vp9_envideo` |
+
+这个列表表示 SwitchVN 构建启用了对应解码器,并不保证每种封装、编码 Profile、Level
+或分辨率都能硬解。设备与视频流兼容时 winedmo 会使用 envideo,否则自动回落软解。
+下文的 `.wmv`、`.asf`、`.mpg`、`.mp4` 等扩展名只是播放路径示例,不是对整个封装
+格式的无条件承诺。
+
+### 播放路径
+
+| 路径 | 代码支持 | 已记录的真机验证 |
+| --- | --- | --- |
+| DirectShow/Quartz | ASF/WMV 与旧式 MPEG graph;MPEG sequence header 恢复、Colour 转换和完整 MP1/MP2 媒体类型 | 已验证 VC-1/WMV3 播放和旧式 MPEG + MP2 OP 播放 |
+| qasf/WM Reader | 安全的停止/跳过顺序和分配器关闭 | 已验证 VC-1/WMV3 停止、跳过回归 |
+| Media Foundation | Unity 所需的 aarch64 系统内存交付;通过 winedmo/envideo 注册 H.265/HEVC 解码器 | 已验证 Unity 系统内存路径;HEVC 专项真机覆盖待补 |
+| WMP ActiveX | `GE-Proton11-5-SwitchVN-2` 中 DirectShow 视频窗口的所有权、嵌入、缩放、显隐和清理 | 代码已实现;专项真机回归待补 |
+
+### 性能
+
+| 编码 | 素材 | 软解 CPU 时间 | NVDEC CPU 时间 | 降幅 | 状态 |
+| --- | --- | ---: | ---: | ---: | --- |
+| VC-1 | 1080p、20 秒 | 13.42s | 3.34s | 75.1% | 已实测 |
+| H.264/AVC | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+| H.265/HEVC | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+| MPEG-1/2 Video | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+| MPEG-4 Part 2 | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+| WMV3 | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+| VP8/VP9 | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+| MJPEG | 同方法素材 | TBD | TBD | TBD | 尚未测量 |
+
+`TBD` 表示还没有同口径的测量记录,不代表解码器不支持或测试失败。
 
 ---
 
@@ -64,7 +110,7 @@ curl -fsSL -o /tmp/install-switchvn.sh https://raw.githubusercontent.com/BandiFe
 1. 把原生 aarch64 的 **envideo** 和 **FFmpeg** 装进 `/usr/local`(需要 sudo)。
 2. 装带 ffmpeg8 包装层的 **Box64**,它把 x86 Proton 里的 `libavcodec.so.62` /
    `libavutil.so.60` 重定向到上面那两个原生库。版本很关键,见下文。
-3. 把 **GE-Proton11-5-SwitchVN-1** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
+3. 把 **GE-Proton11-5-SwitchVN-2** 解到 `~/.local/share/Steam/compatibilitytools.d/`。
 4. 把修好的 **DXVK** 放进 Proton 目录内部,再做符号链接。
 5. 自检:`libenvideo.so` 只能有一份,两个 FFmpeg soname 必须在 ld 缓存里。
 
@@ -104,7 +150,7 @@ SWITCHVN_LOCK=https://raw.githubusercontent.com/BandiFee/SwitchVN/next/switchvn.
 装完之后:
 
 1. 用 Switchdeck 的启动器重启 Steam:`~/.local/share/Steam/launch-steam.sh`
-2. 在游戏的 **属性 → 兼容性** 里勾选强制使用兼容工具,选 **GE-Proton11-5-SwitchVN-1**
+2. 在游戏的 **属性 → 兼容性** 里勾选强制使用兼容工具,选 **GE-Proton11-5-SwitchVN-2**
 
 ### 为什么 DXVK 要塞进 Proton 目录里
 
@@ -172,19 +218,22 @@ curl -fsSL -o /tmp/uninstall-switchvn.sh https://raw.githubusercontent.com/Bandi
 
 | 仓库 | 内容 |
 | --- | --- |
-| [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo envideo 硬解、qasf 死锁修复、wm_reader 修复、aarch64 MF 回退 |
+| [SwitchVN-ProtonGE](https://github.com/BandiFee/SwitchVN-ProtonGE) | winedmo/envideo 硬解;DirectShow 生命周期、MPEG/Colour 与 MP1/MP2 修复;aarch64 MF、HEVC 支持和 WMP ActiveX 视频嵌入 |
 | [SwitchVN-Box64](https://github.com/BandiFee/SwitchVN-Box64) | ffmpeg8 原生包装层 —— libavcodec 62、libavformat 62、libavutil 60、libswscale 9、libswresample 6 重定向到 ARM 构建 |
-| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | FFmpeg 上游 envideo 分支的 aarch64 构建 |
+| [SwitchVN-FFmpeg](https://github.com/BandiFee/SwitchVN-FFmpeg) | FFmpeg envideo 分支的 aarch64 构建,含 VC-1/WMV3 scratch map CPU 可写修复 |
 | [SwitchVN-Envideo](https://github.com/BandiFee/SwitchVN-Envideo) | host1x gather/reloc 偏移修复 |
 | [SwitchVN-DXVK-Sarek](https://github.com/BandiFee/SwitchVN-DXVK-Sarek) | D3D9 呈现模式 vsync 修复 |
 | [SwitchVN-Switchdeck](https://github.com/BandiFee/SwitchVN-Switchdeck) | 去掉 DXVK 下载的 Switchdeck,把 `Switchdeck/DXVK` 让给 SwitchVN |
 
 ## 致谢
 
-- [averne](https://github.com/averne) —— envideo
+上面列出的 SwitchVN 专属集成与兼容性修复由 BandiFee / Jianhao Fei 在这些 fork 中
+编写和维护;它们建立在以下上游项目与作者的工作之上:
+
+- [averne](https://github.com/averne) —— envideo 和 FFmpeg envideo 硬件解码器
 - [SildurFX](https://github.com/SildurFX) —— Switchdeck
 - [pythonlover02](https://github.com/pythonlover02) —— DXVK-Sarek
-- [GloriousEggroll](https://github.com/GloriousEggroll) —— Proton-GE
+- [GloriousEggroll](https://github.com/GloriousEggroll) —— Proton-GE 和 SwitchVN 使用的媒体栈重构基础
 - [ptitSeb](https://github.com/ptitSeb) —— Box64
 
 ## 许可
